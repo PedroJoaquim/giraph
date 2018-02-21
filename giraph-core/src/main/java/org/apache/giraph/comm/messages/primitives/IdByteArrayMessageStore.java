@@ -32,6 +32,7 @@ import org.apache.giraph.comm.messages.MessagesIterable;
 import org.apache.giraph.comm.messages.PartitionSplitInfo;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.factories.MessageValueFactory;
+import org.apache.giraph.master.BspServiceMaster;
 import org.apache.giraph.types.ops.PrimitiveIdTypeOps;
 import org.apache.giraph.types.ops.TypeOpsUtils;
 import org.apache.giraph.types.ops.collections.Basic2ObjectMap;
@@ -44,6 +45,7 @@ import org.apache.giraph.utils.VertexIdMessages;
 import org.apache.giraph.utils.io.DataInputOutput;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
+import org.apache.log4j.Logger;
 
 /**
  * Special message store to be used when IDs are primitive and no combiner is
@@ -62,6 +64,8 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
   private final Int2ObjectOpenHashMap<Basic2ObjectMap<I, DataInputOutput>> map;
   /** Partition split info */
   private final PartitionSplitInfo<I> partitionInfo;
+  /** Class logger */
+  private static final Logger LOG = Logger.getLogger(IdByteArrayMessageStore.class);
   /** Giraph configuration */
   private final ImmutableClassesGiraphConfiguration<I, ?, ?> config;
   /** Vertex id TypeOps */

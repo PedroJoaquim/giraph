@@ -54,6 +54,11 @@ public class CheckpointingUtils {
    */
   public static final String CHECKPOINT_DATA_POSTFIX = ".data";
   /**
+   * If at the end of a checkpoint file,
+   * indicates that we store messages for partitions.
+   */
+  public static final String CHECKPOINT_MESSAGES_POSTFIX = ".messages";
+  /**
    * If at the end of a checkpoint file, indicates the stitched checkpoint
    * file prefixes.  A checkpoint is not valid if this file does not exist.
    */

@@ -20,6 +20,7 @@ package org.apache.giraph.master;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import jdk.internal.jline.internal.Log;
 import net.iharder.Base64;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.giraph.bsp.ApplicationState;
@@ -723,6 +724,74 @@ public class BspServiceMaster<I extends WritableComparable,
    * @throws KeeperException
    * @return Collection of generated partition owners.
    */
+  private Collection<PartitionOwner> prepareCheckpointRestartOld(long superstep)
+          throws IOException, KeeperException, InterruptedException {
+    List<PartitionOwner> partitionOwners = new ArrayList<>();
+    FileSystem fs = getFs();
+    String finalizedCheckpointPath = getSavedCheckpointBasePath(superstep) +
+            CheckpointingUtils.CHECKPOINT_FINALIZED_POSTFIX;
+    LOG.info("Loading checkpoint from " + finalizedCheckpointPath);
+    DataInputStream finalizedStream =
+            fs.open(new Path(finalizedCheckpointPath));
+    GlobalStats globalStats = new GlobalStats();
+    globalStats.readFields(finalizedStream);
+    updateCounters(globalStats);
+    SuperstepClasses superstepClasses =
+            SuperstepClasses.createToRead(getConfiguration());
+    superstepClasses.readFields(finalizedStream);
+    getConfiguration().updateSuperstepClasses(superstepClasses);
+    int prefixFileCount = finalizedStream.readInt();
+
+    String checkpointFile =
+            finalizedStream.readUTF();
+    for (int i = 0; i < prefixFileCount; ++i) {
+      int mrTaskId = finalizedStream.readInt();
+
+      DataInputStream metadataStream = fs.open(new Path(checkpointFile +
+              "." + mrTaskId + CheckpointingUtils.CHECKPOINT_METADATA_POSTFIX));
+      long partitions = metadataStream.readInt();
+      WorkerInfo worker = getWorkerInfoById(mrTaskId);
+      for (long p = 0; p < partitions; ++p) {
+        int partitionId = metadataStream.readInt();
+        PartitionOwner partitionOwner = new BasicPartitionOwner(partitionId,
+                worker);
+        partitionOwners.add(partitionOwner);
+        LOG.info("prepareCheckpointRestart partitionId=" + partitionId +
+                " assigned to " + partitionOwner);
+      }
+      metadataStream.close();
+    }
+    //Ordering appears to be important as of right now we rely on this ordering
+    //in WorkerGraphPartitioner
+    Collections.sort(partitionOwners, new Comparator<PartitionOwner>() {
+      @Override
+      public int compare(PartitionOwner p1, PartitionOwner p2) {
+        return Integer.compare(p1.getPartitionId(), p2.getPartitionId());
+      }
+    });
+
+
+    globalCommHandler.getAggregatorHandler().readFields(finalizedStream);
+    aggregatorTranslation.readFields(finalizedStream);
+    masterCompute.readFields(finalizedStream);
+    finalizedStream.close();
+
+    return partitionOwners;
+  }
+
+  /**
+   * Read the finalized checkpoint file and associated metadata files for the
+   * checkpoint.  Modifies the {@link PartitionOwner} objects to get the
+   * checkpoint prefixes.  It is an optimization to prevent all workers from
+   * searching all the files.  Also read in the aggregator data from the
+   * finalized checkpoint file and setting it.
+   *
+   * @param superstep Checkpoint set to examine.
+   * @throws IOException
+   * @throws InterruptedException
+   * @throws KeeperException
+   * @return Collection of generated partition owners.
+   */
   private Collection<PartitionOwner> prepareCheckpointRestart(long superstep)
     throws IOException, KeeperException, InterruptedException {
     List<PartitionOwner> partitionOwners = new ArrayList<>();
@@ -743,15 +812,22 @@ public class BspServiceMaster<I extends WritableComparable,
 
     String checkpointFile =
         finalizedStream.readUTF();
+
+    int currentWorker = 0;
+
     for (int i = 0; i < prefixFileCount; ++i) {
       int mrTaskId = finalizedStream.readInt();
 
       DataInputStream metadataStream = fs.open(new Path(checkpointFile +
           "." + mrTaskId + CheckpointingUtils.CHECKPOINT_METADATA_POSTFIX));
       long partitions = metadataStream.readInt();
-      WorkerInfo worker = getWorkerInfoById(mrTaskId);
+
       for (long p = 0; p < partitions; ++p) {
         int partitionId = metadataStream.readInt();
+
+        WorkerInfo worker = getWorkerInfoList().get(currentWorker);
+        currentWorker = (currentWorker + 1) % getWorkerInfoList().size();//TODO
+
         PartitionOwner partitionOwner = new BasicPartitionOwner(partitionId,
             worker);
         partitionOwners.add(partitionOwner);
@@ -1096,6 +1172,9 @@ public class BspServiceMaster<I extends WritableComparable,
       partitionOwners =
           masterGraphPartitioner.createInitialPartitionOwners(
               chosenWorkerInfoList, maxWorkers);
+
+      LOG.info("assignPartitionOwners: executed initial partition assignment"); //TODO
+
       if (partitionOwners.isEmpty()) {
         throw new IllegalStateException(
             "assignAndExchangePartitions: No partition owners set");

@@ -21,5 +21,4 @@ under the License.
 <!-- This configuration is for Giraph-specific configs that should be set across runs -->
 
 <configuration>
-
 </configuration>
