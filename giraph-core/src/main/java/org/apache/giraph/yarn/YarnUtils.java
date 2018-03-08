@@ -25,6 +25,8 @@ import org.apache.giraph.conf.GiraphConstants;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsPermission;
+import org.apache.hadoop.fs.permission.FsAction;
 import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.LocalResource;
@@ -62,15 +64,16 @@ public class YarnUtils {
    * @param appId the ApplicationId, naming the the HDFS base dir for job jars.
    */
   public static void addFsResourcesToMap(Map<String, LocalResource> map,
-    GiraphConfiguration giraphConf, ApplicationId appId) throws IOException {
+                                         GiraphConfiguration giraphConf, ApplicationId appId) throws IOException {
     FileSystem fs = FileSystem.get(giraphConf);
-    Path baseDir = YarnUtils.getFsCachePath(fs, appId);
+    Path baseDir = YarnUtils.getFsCachePath(fs, appId, giraphConf.getYarnClientUser());
+    
     boolean coreJarFound = false;
     for (String fileName : giraphConf.getYarnLibJars().split(",")) {
       if (fileName.length() > 0) {
         Path filePath = new Path(baseDir, fileName);
         LOG.info("Adding " + fileName + " to LocalResources for export.to " +
-          filePath);
+                filePath);
         if (fileName.contains("giraph-core")) {
           coreJarFound = true;
         }
@@ -126,7 +129,7 @@ public class YarnUtils {
    * @param fileNames file names to locate.
    */
   private static void populateJarList(final File dir,
-    final Set<Path> fileSet, final Set<String> fileNames) {
+                                      final Set<Path> fileSet, final Set<String> fileNames) {
     File[] filesInThisDir = dir.listFiles();
     if (null == filesInThisDir) {
       return;
@@ -147,8 +150,8 @@ public class YarnUtils {
    * @param target the file to send to the remote container.
    */
   public static void addFileToResourceMap(Map<String, LocalResource>
-    localResources, FileSystem fs, Path target)
-    throws IOException {
+                                                  localResources, FileSystem fs, Path target)
+          throws IOException {
     LocalResource resource = Records.newRecord(LocalResource.class);
     FileStatus destStatus = fs.getFileStatus(target);
     resource.setResource(ConverterUtils.getYarnUrlFromURI(target.toUri()));
@@ -167,8 +170,22 @@ public class YarnUtils {
    * @return the path
    */
   public static Path getFsCachePath(final FileSystem fs,
-    final ApplicationId appId) {
-    return new Path(fs.getHomeDirectory(), HDFS_RESOURCE_DIR + "/" + appId);
+                                    final ApplicationId appId) {
+    return getFsCachePath(fs, appId, System.getProperty("user.name"));
+  }
+
+  /**
+   * Get the base HDFS dir we will be storing our LocalResources in.
+   * @param fs the file system.
+   * @param appId the ApplicationId under which our resources will be stored.
+   * @param user The user that submitted this application.
+   * @return the path
+   */
+
+  public static Path getFsCachePath(final FileSystem fs,
+                                    final ApplicationId appId, final String user) {
+    return new Path("/user/" + user,
+            HDFS_RESOURCE_DIR + "/" + appId).makeQualified(fs);
   }
 
   /**
@@ -179,17 +196,17 @@ public class YarnUtils {
    * @param giraphConf the GiraphConfiguration to pull values from.
    */
   public static void addLocalClasspathToEnv(final Map<String, String> env,
-    final GiraphConfiguration giraphConf) {
+                                            final GiraphConfiguration giraphConf) {
     StringBuilder classPathEnv = new StringBuilder("${CLASSPATH}:./*");
     for (String cpEntry : giraphConf.getStrings(
-      YarnConfiguration.YARN_APPLICATION_CLASSPATH,
-      YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH)) {
+            YarnConfiguration.YARN_APPLICATION_CLASSPATH,
+            YarnConfiguration.DEFAULT_YARN_APPLICATION_CLASSPATH)) {
       classPathEnv.append(':').append(cpEntry.trim()); //TODO: Separator
     }
     for (String cpEntry : giraphConf.getStrings(
-      MRJobConfig.MAPREDUCE_APPLICATION_CLASSPATH,
-      StringUtils.getStrings(
-        MRJobConfig.DEFAULT_MAPREDUCE_APPLICATION_CLASSPATH))) {
+            MRJobConfig.MAPREDUCE_APPLICATION_CLASSPATH,
+            StringUtils.getStrings(
+                    MRJobConfig.DEFAULT_MAPREDUCE_APPLICATION_CLASSPATH))) {
       classPathEnv.append(':').append(cpEntry.trim());
     }
     // add the runtime classpath needed for tests to work
@@ -206,11 +223,12 @@ public class YarnUtils {
    * @param localResourceMap the LocalResource map of files to export to tasks.
    */
   public static void addGiraphConfToLocalResourceMap(GiraphConfiguration
-    giraphConf, ApplicationId appId, Map<String, LocalResource>
-    localResourceMap) throws IOException {
+                                                             giraphConf, ApplicationId appId, Map<String, LocalResource>
+                                                             localResourceMap) throws IOException {
     FileSystem fs = FileSystem.get(giraphConf);
-    Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId),
-      GiraphConstants.GIRAPH_YARN_CONF_FILE);
+    Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId,
+            giraphConf.getYarnClientUser()),
+            GiraphConstants.GIRAPH_YARN_CONF_FILE);
     YarnUtils.addFileToResourceMap(localResourceMap, fs, hdfsConfPath);
   }
 
@@ -221,9 +239,9 @@ public class YarnUtils {
    * @param appId the ApplicationId to stamp this app's base HDFS resources dir.
    */
   public static void exportGiraphConfiguration(GiraphConfiguration giraphConf,
-    ApplicationId appId) throws IOException {
+                                               ApplicationId appId) throws IOException {
     File confFile = new File(System.getProperty("java.io.tmpdir"),
-      GiraphConstants.GIRAPH_YARN_CONF_FILE);
+            GiraphConstants.GIRAPH_YARN_CONF_FILE);
     if (confFile.exists()) {
       if (!confFile.delete()) {
         LOG.warn("Unable to delete file " + confFile);
@@ -235,13 +253,34 @@ public class YarnUtils {
       fos = new FileOutputStream(localConfPath);
       giraphConf.writeXml(fos);
       FileSystem fs = FileSystem.get(giraphConf);
-      Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId),
-        GiraphConstants.GIRAPH_YARN_CONF_FILE);
+      Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId,
+              giraphConf.getYarnClientUser()),
+              GiraphConstants.GIRAPH_YARN_CONF_FILE);
       fos.flush();
       fs.copyFromLocalFile(false, true, new Path(localConfPath), hdfsConfPath);
+      // In case the app submission user and yarn daemons user are different,
+      // not setting write permissions to all might result in
+      // AccessControlExceptions when GiraphAppMaster tries to export the
+      // new configuration for the GiraphYarnTasks
+      //
+      // TODO: Sophisticated ACL for the yarn daemons user?
+
+      LOG.info("hdfsPath = " + hdfsConfPath.toString());
+
+      try {
+        fs.setPermission(hdfsConfPath, new FsPermission(FsAction.READ_WRITE,
+                FsAction.READ_WRITE, FsAction.READ_WRITE));
+      } catch (IOException e) {
+        LOG.info("Unable to set RW permissions on giraph configuration " +
+                hdfsConfPath);
+      }
+
     } finally {
       if (null != fos) {
         fos.close();
+        if (!confFile.delete()) {
+                    LOG.info("Unable to delete file after use " + confFile);
+        }
       }
     }
   }

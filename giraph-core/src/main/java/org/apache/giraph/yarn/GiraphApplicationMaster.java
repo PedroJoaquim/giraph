@@ -32,7 +32,7 @@ import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.yarn.api.ApplicationConstants;
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment;
 import org.apache.hadoop.yarn.api.protocolrecords
-  .RegisterApplicationMasterResponse;
+        .RegisterApplicationMasterResponse;
 import org.apache.hadoop.yarn.api.records.ApplicationAttemptId;
 import org.apache.hadoop.yarn.api.records.Container;
 import org.apache.hadoop.yarn.api.records.ContainerId;
@@ -78,7 +78,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class GiraphApplicationMaster {
   /** Logger */
   private static final Logger LOG =
-    Logger.getLogger(GiraphApplicationMaster.class);
+          Logger.getLogger(GiraphApplicationMaster.class);
   /** Exit code for YARN containers that were manually killed/aborted */
   private static final int YARN_ABORT_EXIT_STATUS = -100;
   /** Exit code for successfully run YARN containers */
@@ -94,8 +94,8 @@ public class GiraphApplicationMaster {
    */
 //TODO
   /** For status update for clients - yet to be implemented\\
-  * Hostname of the container
-  */
+   * Hostname of the container
+   */
   private String appMasterHostname = "";
   /** Port on which the app master listens for status updates from clients*/
   private int appMasterRpcPort = 0;
@@ -151,12 +151,12 @@ public class GiraphApplicationMaster {
    * @param aId the ApplicationAttemptId
    */
   protected GiraphApplicationMaster(ContainerId cId, ApplicationAttemptId aId)
-    throws IOException {
+          throws IOException {
     containerId = cId; // future good stuff will need me to operate.
     appAttemptId = aId;
     lastResponseId = new AtomicInteger(0);
     giraphConf =
-      new ImmutableClassesGiraphConfiguration(new GiraphConfiguration());
+            new ImmutableClassesGiraphConfiguration(new GiraphConfiguration());
     yarnConf = new YarnConfiguration(giraphConf);
     completedCount = new AtomicInteger(0);
     failedCount = new AtomicInteger(0);
@@ -166,7 +166,8 @@ public class GiraphApplicationMaster {
     executor = Executors.newFixedThreadPool(containersToLaunch);
     heapPerContainer = giraphConf.getYarnTaskHeapMb();
     LOG.info("GiraphAM  for ContainerId " + cId + " ApplicationAttemptId " +
-      aId);
+            aId);
+    LOG.info("Yarn client user: " + giraphConf.getYarnClientUser());
   }
 
   /**
@@ -192,6 +193,11 @@ public class GiraphApplicationMaster {
         }
       }
       LOG.info("Done " + done);
+      // CHECKSTYLE: stop IllegalCatch
+    } catch (Throwable e) {
+      // CHECKSTYLE: resume IllegalCatch
+      LOG.error("GiraphApplicationMaster caught error while running.", e);
+
     } finally {
       // if we get here w/o problems, the executor is already long finished.
       if (null != executor && !executor.isTerminated()) {
@@ -219,13 +225,13 @@ public class GiraphApplicationMaster {
     String appMessage = null;
     boolean success = true;
     if (failedCount.get() == 0 &&
-        completedCount.get() == containersToLaunch) {
+            completedCount.get() == containersToLaunch) {
       appStatus = FinalApplicationStatus.SUCCEEDED;
     } else {
       appStatus = FinalApplicationStatus.FAILED;
       appMessage = "Diagnostics." + ", total=" + containersToLaunch +
-        ", completed=" + completedCount.get() +  ", failed=" +
-        failedCount.get();
+              ", completed=" + completedCount.get() +  ", failed=" +
+              failedCount.get();
       success = false;
     }
     try {
@@ -256,11 +262,11 @@ public class GiraphApplicationMaster {
     }
   }
 
-   /**
-    * Setup the request that will be sent to the RM for the container ask.
-    *
-    * @return the setup ResourceRequest to be sent to RM
-    */
+  /**
+   * Setup the request that will be sent to the RM for the container ask.
+   *
+   * @return the setup ResourceRequest to be sent to RM
+   */
   private ContainerRequest setupContainerAskForRM() {
     // setup requirements for hosts
     // using * as any host will do for the distributed shell app
@@ -275,7 +281,7 @@ public class GiraphApplicationMaster {
     capability.setMemory(heapPerContainer);
 
     ContainerRequest request = new ContainerRequest(capability, null, null,
-      pri);
+            pri);
     LOG.info("Requested container ask: " + request.toString());
     return request;
   }
@@ -286,7 +292,7 @@ public class GiraphApplicationMaster {
    */
   private void getAllTokens() throws IOException {
     Credentials credentials = UserGroupInformation.getCurrentUser()
-        .getCredentials();
+            .getCredentials();
     DataOutputBuffer dob = new DataOutputBuffer();
     credentials.writeTokenStorageToStream(dob);
     // Now remove the AM->RM token so that containers cannot access it.
@@ -310,7 +316,7 @@ public class GiraphApplicationMaster {
   private void registerRMCallBackHandler() {
     AMRMClientAsync.CallbackHandler allocListener = new RMCallbackHandler();
     amRMClient = AMRMClientAsync.createAMRMClientAsync(1000,
-      allocListener);
+            allocListener);
     amRMClient.init(yarnConf);
     amRMClient.start();
   }
@@ -330,7 +336,7 @@ public class GiraphApplicationMaster {
    * @return AM register response
    */
   private RegisterApplicationMasterResponse registerAMToRM()
-    throws YarnException {
+          throws YarnException {
     // register Application Master with the YARN Resource Manager so we can
     // begin requesting resources.
     try {
@@ -339,12 +345,12 @@ public class GiraphApplicationMaster {
       }
       // TODO: provide actual call back details
       RegisterApplicationMasterResponse response = amRMClient
-        .registerApplicationMaster(appMasterHostname
-        , appMasterRpcPort, appMasterTrackingUrl);
+              .registerApplicationMaster(appMasterHostname
+                      , appMasterRpcPort, appMasterTrackingUrl);
       return response;
     } catch (IOException ioe) {
       throw new IllegalStateException(
-        "GiraphApplicationMaster failed to register with RM.", ioe);
+              "GiraphApplicationMaster failed to register with RM.", ioe);
     }
   }
 
@@ -354,19 +360,19 @@ public class GiraphApplicationMaster {
    * @param allocatedContainers the containers we have currently allocated.
    */
   private void startContainerLaunchingThreads(final List<Container>
-    allocatedContainers) {
+                                                      allocatedContainers) {
     for (Container allocatedContainer : allocatedContainers) {
       LOG.info("Launching command on a new container." +
-        ", containerId=" + allocatedContainer.getId() +
-        ", containerNode=" + allocatedContainer.getNodeId().getHost() +
-        ":" + allocatedContainer.getNodeId().getPort() +
-        ", containerNodeURI=" + allocatedContainer.getNodeHttpAddress() +
-        ", containerResourceMemory=" +
-        allocatedContainer.getResource().getMemory());
+              ", containerId=" + allocatedContainer.getId() +
+              ", containerNode=" + allocatedContainer.getNodeId().getHost() +
+              ":" + allocatedContainer.getNodeId().getPort() +
+              ", containerNodeURI=" + allocatedContainer.getNodeHttpAddress() +
+              ", containerResourceMemory=" +
+              allocatedContainer.getResource().getMemory());
       // Launch and start the container on a separate thread to keep the main
       // thread unblocked as all containers may not be allocated at one go.
       LaunchContainerRunnable runnableLaunchContainer =
-        new LaunchContainerRunnable(allocatedContainer, containerListener);
+              new LaunchContainerRunnable(allocatedContainer, containerListener);
       executor.execute(runnableLaunchContainer);
     }
   }
@@ -385,11 +391,11 @@ public class GiraphApplicationMaster {
         // if you have to update the giraphConf for export to tasks, do it now
         updateGiraphConfForExport();
         YarnUtils.addFsResourcesToMap(LOCAL_RESOURCES, giraphConf,
-          appAttemptId.getApplicationId());
+                appAttemptId.getApplicationId());
       } catch (IOException ioe) {
         // fail fast, this container will never launch.
         throw new IllegalStateException("Could not configure the container" +
-          "launch context for GiraphYarnTasks.", ioe);
+                "launch context for GiraphYarnTasks.", ioe);
       }
     }
     // else, return the prepopulated copy to reuse for each GiraphYarkTask
@@ -403,13 +409,13 @@ public class GiraphApplicationMaster {
    * stored in HDFS with the copy you have modified locally in-memory.
    */
   private void updateGiraphConfForExport()
-    throws IOException {
+          throws IOException {
     // Giraph expects this MapReduce stuff
     giraphConf.setInt(MRJobConfig.APPLICATION_ATTEMPT_ID,
-      appAttemptId.getAttemptId());
+            appAttemptId.getAttemptId());
     // now republish the giraph-conf.xml in HDFS
     YarnUtils.exportGiraphConfiguration(giraphConf,
-      appAttemptId.getApplicationId());
+            appAttemptId.getApplicationId());
   }
 
   /**
@@ -420,7 +426,7 @@ public class GiraphApplicationMaster {
     boolean result = false;
     LOG.info("Starting GitaphAM ");
     String containerIdString =  System.getenv().get(
-      Environment.CONTAINER_ID.name());
+            Environment.CONTAINER_ID.name());
     if (containerIdString == null) {
       // container id should always be set in the env by the framework
       throw new IllegalArgumentException("ContainerId not found in env vars.");
@@ -429,13 +435,13 @@ public class GiraphApplicationMaster {
     ApplicationAttemptId appAttemptId = containerId.getApplicationAttemptId();
     try {
       GiraphApplicationMaster giraphAppMaster =
-        new GiraphApplicationMaster(containerId, appAttemptId);
+              new GiraphApplicationMaster(containerId, appAttemptId);
       result = giraphAppMaster.run();
       // CHECKSTYLE: stop IllegalCatch
     } catch (Throwable t) {
       // CHECKSTYLE: resume IllegalCatch
       LOG.error("GiraphApplicationMaster caught a " +
-                  "top-level exception in main.", t);
+              "top-level exception in main.", t);
       System.exit(1);
     }
     if (result) {
@@ -463,7 +469,7 @@ public class GiraphApplicationMaster {
      * @param containerListener container listener.
      */
     public LaunchContainerRunnable(final Container newGiraphTaskContainer,
-      NMCallbackHandler containerListener) {
+                                   NMCallbackHandler containerListener) {
       this.container = newGiraphTaskContainer;
       this.containerListener = containerListener;
     }
@@ -490,9 +496,9 @@ public class GiraphApplicationMaster {
      */
     private ContainerLaunchContext buildContainerLaunchContext() {
       LOG.info("Setting up container launch container for containerid=" +
-        container.getId());
+              container.getId());
       ContainerLaunchContext launchContext = Records
-        .newRecord(ContainerLaunchContext.class);
+              .newRecord(ContainerLaunchContext.class);
       // args inject the CLASSPATH, heap MB, and TaskAttemptID for launched task
       final List<String> commands = generateShellExecCommand();
       LOG.info("Conatain launch Commands :" + commands.get(0));
@@ -512,7 +518,7 @@ public class GiraphApplicationMaster {
         jobUserName = ugi.getUserName();
       } catch (IOException ioe) {
         jobUserName =
-          System.getenv(ApplicationConstants.Environment.USER.name());
+                System.getenv(ApplicationConstants.Environment.USER.name());
       }
       //launchContext.setUser(jobUserName);
       LOG.info("Setting username in ContainerLaunchContext to: " + jobUserName);
@@ -529,18 +535,18 @@ public class GiraphApplicationMaster {
      */
     private List<String> generateShellExecCommand() {
       return ImmutableList.of("java " +
-        "-Xmx" + heapPerContainer + "M " +
-        "-Xms" + heapPerContainer + "M " +
-        "-cp .:${CLASSPATH} " +
-        "org.apache.giraph.yarn.GiraphYarnTask " +
-        appAttemptId.getApplicationId().getClusterTimestamp() + " " +
-        appAttemptId.getApplicationId().getId() + " " +
-        container.getId().getId() + " " +
-        appAttemptId.getAttemptId() + " " +
-        "1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +
-        "/task-" + container.getId().getId() + "-stdout.log " +
-        "2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +
-        "/task-" + container.getId().getId() + "-stderr.log "
+              "-Xmx" + heapPerContainer + "M " +
+              "-Xms" + heapPerContainer + "M " +
+              "-cp .:${CLASSPATH} " +
+              "org.apache.giraph.yarn.GiraphYarnTask " +
+              appAttemptId.getApplicationId().getClusterTimestamp() + " " +
+              appAttemptId.getApplicationId().getId() + " " +
+              container.getId().getId() + " " +
+              appAttemptId.getAttemptId() + " " +
+              "1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +
+              "/task-" + container.getId().getId() + "-stdout.log " +
+              "2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +
+              "/task-" + container.getId().getId() + "-stderr.log "
       );
     }
 
@@ -567,24 +573,24 @@ public class GiraphApplicationMaster {
     @SuppressWarnings("unchecked")
     @Override
     public void onContainersCompleted(List<ContainerStatus>
-      completedContainers) {
+                                              completedContainers) {
       LOG.info("Got response from RM for container ask, completedCnt=" +
-        completedContainers.size());
+              completedContainers.size());
       for (ContainerStatus containerStatus : completedContainers) {
         LOG.info("Got container status for containerID=" +
-          containerStatus.getContainerId() + ", state=" +
-          containerStatus.getState() + ", exitStatus=" +
-          containerStatus.getExitStatus() + ", diagnostics=" +
-          containerStatus.getDiagnostics());
+                containerStatus.getContainerId() + ", state=" +
+                containerStatus.getState() + ", exitStatus=" +
+                containerStatus.getExitStatus() + ", diagnostics=" +
+                containerStatus.getDiagnostics());
         switch (containerStatus.getExitStatus()) {
-        case YARN_SUCCESS_EXIT_STATUS:
-          successfulCount.incrementAndGet();
-          break;
-        case YARN_ABORT_EXIT_STATUS:
-          break; // not success or fail
-        default:
-          failedCount.incrementAndGet();
-          break;
+          case YARN_SUCCESS_EXIT_STATUS:
+            successfulCount.incrementAndGet();
+            break;
+          case YARN_ABORT_EXIT_STATUS:
+            break; // not success or fail
+          default:
+            failedCount.incrementAndGet();
+            break;
         }
         completedCount.incrementAndGet();
       }
@@ -594,20 +600,20 @@ public class GiraphApplicationMaster {
         LOG.info("All container compeleted. done = " + done);
       } else {
         LOG.info("After completion of one conatiner. current status is:" +
-          " completedCount :" + completedCount.get() +
-          " containersToLaunch :" + containersToLaunch +
-          " successfulCount :" + successfulCount.get() +
-          " failedCount :" + failedCount.get());
+                " completedCount :" + completedCount.get() +
+                " containersToLaunch :" + containersToLaunch +
+                " successfulCount :" + successfulCount.get() +
+                " failedCount :" + failedCount.get());
       }
     }
     @Override
     public void onContainersAllocated(List<Container> allocatedContainers) {
       LOG.info("Got response from RM for container ask, allocatedCnt=" +
-          allocatedContainers.size());
+              allocatedContainers.size());
       allocatedCount.addAndGet(allocatedContainers.size());
       LOG.info("Total allocated # of container so far : " +
-        allocatedCount.get() +
-        " allocated out of " + containersToLaunch + " required.");
+              allocatedCount.get() +
+              " allocated out of " + containersToLaunch + " required.");
       startContainerLaunchingThreads(allocatedContainers);
     }
 
@@ -624,7 +630,7 @@ public class GiraphApplicationMaster {
     public float getProgress() {
       // set progress to deliver to RM on next heartbeat
       float progress = (float) completedCount.get() /
-          containersToLaunch;
+              containersToLaunch;
       return progress;
     }
 
@@ -641,7 +647,7 @@ public class GiraphApplicationMaster {
   private class NMCallbackHandler implements NMClientAsync.CallbackHandler {
     /** List of containers */
     private ConcurrentMap<ContainerId, Container> containers =
-          new ConcurrentHashMap<ContainerId, Container>();
+            new ConcurrentHashMap<ContainerId, Container>();
 
     /**
      * Add a container
@@ -663,23 +669,23 @@ public class GiraphApplicationMaster {
 
     @Override
     public void onContainerStatusReceived(ContainerId containerId,
-        ContainerStatus containerStatus) {
+                                          ContainerStatus containerStatus) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Container Status: id=" + containerId + ", status=" +
-            containerStatus);
+                containerStatus);
       }
     }
 
     @Override
     public void onContainerStarted(ContainerId containerId,
-        Map<String, ByteBuffer> allServiceResponse) {
+                                   Map<String, ByteBuffer> allServiceResponse) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("Succeeded to start Container " + containerId);
       }
       Container container = containers.get(containerId);
       if (container != null) {
         nmClientAsync.getContainerStatusAsync(containerId,
-          container.getNodeId());
+                container.getNodeId());
       }
     }
 
@@ -691,7 +697,7 @@ public class GiraphApplicationMaster {
 
     @Override
     public void onGetContainerStatusError(
-      ContainerId containerId, Throwable t) {
+            ContainerId containerId, Throwable t) {
       LOG.error("Failed to query the status of Container " + containerId, t);
     }
 

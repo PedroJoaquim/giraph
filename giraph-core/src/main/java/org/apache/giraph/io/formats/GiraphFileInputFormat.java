@@ -219,6 +219,11 @@ public abstract class GiraphFileInputFormat<K, V>
   private List<FileStatus> listStatus(JobContext job, Path[] dirs)
     throws IOException {
     List<FileStatus> result = new ArrayList<FileStatus>();
+
+    for (Path p : dirs) {
+      LOG.info("debug: INPUT PATH: " + p.toString());
+    }
+
     if (dirs.length == 0) {
       throw new IOException("No input paths specified in job");
     }

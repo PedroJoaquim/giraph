@@ -79,6 +79,7 @@ public class GiraphYarnTask<I extends WritableComparable, V extends Writable,
     conf.setInt("mapred.task.partition", bspTaskId);
     proxy = buildProxyMapperContext(taskAttemptId);
     graphTaskManager = new GraphTaskManager<I, V, E>(proxy);
+    LOG.info("Yarn client user: " + conf.getYarnClientUser());
   }
 
   /**

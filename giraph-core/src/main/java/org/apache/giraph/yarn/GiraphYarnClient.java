@@ -194,6 +194,7 @@ public class GiraphYarnClient {
     GiraphConstants.IS_PURE_YARN_JOB.set(giraphConf, true);
     GiraphConstants.SPLIT_MASTER_WORKER.set(giraphConf, true);
     giraphConf.set("mapred.job.id", "giraph_yarn_" + appId); // ZK app base path
+    LOG.info("Yarn client user: " + giraphConf.getYarnClientUser());
   }
 
   /**
@@ -309,7 +310,7 @@ public class GiraphYarnClient {
     FileSystem fs = FileSystem.get(giraphConf);
     Path baseCacheDir = YarnUtils.getFsCachePath(fs, appId);
     if (fs.exists(baseCacheDir)) {
-      LOG.info("Cleaning up HDFS distributed cache directory for Giraph job.");
+      LOG.info("Cleaning up HDFS distributed cache directory for Giraph job: " + baseCacheDir);
       fs.delete(baseCacheDir, true); // stuff inside
       fs.delete(baseCacheDir, false); // dir itself
     }
