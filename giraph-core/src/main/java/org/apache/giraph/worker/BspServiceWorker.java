@@ -1245,8 +1245,10 @@ else[HADOOP_NON_SECURE]*/
     workerServer.close();
   }
 
-  //@Override
+  @Override
   public void storeCheckpoint() throws IOException {
+
+    long start = System.currentTimeMillis();
 
     LoggerUtils.setStatusAndLog(getContext(), LOG, Level.INFO,
             "storeCheckpoint: Starting checkpoint " +
@@ -1270,6 +1272,7 @@ else[HADOOP_NON_SECURE]*/
     for (Integer partitionId : getPartitionStore().getPartitionIds()) {
       metadataOutputStream.writeInt(partitionId);
     }
+
     metadataOutputStream.close();
 
     storeCheckpointVertices();
@@ -1297,6 +1300,10 @@ else[HADOOP_NON_SECURE]*/
               workerWroteCheckpoint +
               " failed with InterruptedException", e);
     }
+
+    long end = System.currentTimeMillis();
+
+    LOG.info("analysis-checkpoint-slave: time = " + (end - start)/1000 + " seconds");
   }
 
   public void storeCheckpointOld() throws IOException {

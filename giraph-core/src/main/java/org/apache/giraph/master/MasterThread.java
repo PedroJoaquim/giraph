@@ -23,6 +23,7 @@ import org.apache.giraph.bsp.BspService;
 import org.apache.giraph.bsp.CentralizedServiceMaster;
 import org.apache.giraph.bsp.SuperstepState;
 import org.apache.giraph.counters.GiraphTimers;
+import org.apache.giraph.emr.s3.S3InfoSender;
 import org.apache.giraph.graph.Computation;
 import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.hadoop.io.Writable;
@@ -63,6 +64,7 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
   /** Superstep timer (in seconds) map */
   private final Map<Long, Double> superstepSecsMap =
       new TreeMap<Long, Double>();
+
 
   /**
    * Constructor.
@@ -174,16 +176,20 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
           context.progress();
         }
         if (LOG.isInfoEnabled()) {
-          LOG.info("shutdown: Took " +
-              (System.currentTimeMillis() - endMillis) /
-              1000.0d + " seconds.");
-          LOG.info("total: Took " +
-              ((System.currentTimeMillis() - initializeMillis) /
-              1000.0d) + " seconds.");
+
+          double shutdownSecs = (System.currentTimeMillis() - endMillis) / 1000.0d;
+
+          double totalSecs =  (System.currentTimeMillis() - initializeMillis) / 1000.0d;
+
+          LOG.info("shutdown: Took " + shutdownSecs + " seconds.");
+          LOG.info("total: Took " + totalSecs + " seconds.");
+
+          S3InfoSender.uploadInfoToS3(setupSecs, superstepSecsMap, shutdownSecs, totalSecs);
         }
         GiraphTimers.getInstance().getTotalMs().
           increment(System.currentTimeMillis() - initializeMillis);
       }
+
       bspServiceMaster.postApplication();
       // CHECKSTYLE: stop IllegalCatchCheck
     } catch (Exception e) {

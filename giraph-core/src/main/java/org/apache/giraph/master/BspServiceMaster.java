@@ -20,7 +20,6 @@ package org.apache.giraph.master;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import jdk.internal.jline.internal.Log;
 import net.iharder.Base64;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.giraph.bsp.ApplicationState;
@@ -39,7 +38,7 @@ import org.apache.giraph.conf.GiraphConfiguration;
 import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.counters.GiraphStats;
-import org.apache.giraph.emr.GiraphS3Checkpointer;
+import org.apache.giraph.emr.s3.S3Checkpointer;
 import org.apache.giraph.graph.AddressesAndPartitionsWritable;
 import org.apache.giraph.graph.GlobalStats;
 import org.apache.giraph.graph.GraphFunctions;
@@ -187,6 +186,10 @@ public class BspServiceMaster<I extends WritableComparable,
   private CheckpointStatus checkpointStatus;
   /** Checks if checkpointing supported */
   private final CheckpointSupportedChecker checkpointSupportedChecker;
+  /** time to checkpoint to hdfs*/
+  private double hdfsCheckpointSecs = 0d;
+  /** time to send checkpoints to s3*/
+  private double s3CheckpointSecs = 0d;
 
   /**
    * Constructor for setting up the master.
@@ -1163,11 +1166,7 @@ public class BspServiceMaster<I extends WritableComparable,
     GiraphStats.getInstance().
             getLastCheckpointedSuperstep().setValue(superstep);
 
-    long start = System.currentTimeMillis();
-    GiraphS3Checkpointer.upload(superstep, getConfiguration());
-    long end = System.currentTimeMillis();
-
-    LOG.info("debug-upload-time = " + (end - start)/1000);
+    S3Checkpointer.upload(superstep, getConfiguration());
   }
 
   /**
@@ -1689,6 +1688,9 @@ public class BspServiceMaster<I extends WritableComparable,
     // Finalize the valid checkpoint file prefixes and possibly
     // the aggregators.
     if (checkpointStatus != CheckpointStatus.NONE) {
+
+      long start = System.currentTimeMillis();
+
       String workerWroteCheckpointPath =
               getWorkerWroteCheckpointPath(getApplicationAttempt(),
                       getSuperstep());
@@ -1706,6 +1708,11 @@ public class BspServiceMaster<I extends WritableComparable,
                 "coordinateSuperstep: IOException on finalizing checkpoint",
                 e);
       }
+
+      long end = System.currentTimeMillis();
+
+      LOG.info("analysis-checkpoint-master: time = " + (end-start)/1000 + " seconds");
+
       if (checkpointStatus == CheckpointStatus.CHECKPOINT_AND_HALT) {
         return SuperstepState.CHECKPOINT_AND_HALT;
       }
@@ -1773,6 +1780,7 @@ public class BspServiceMaster<I extends WritableComparable,
     if (!globalStats.getHaltComputation()) {
       superstepClasses.verifyTypesMatch(getSuperstep() > 0);
     }
+
     getConfiguration().updateSuperstepClasses(superstepClasses);
 
     //Signal workers that we want to checkpoint
