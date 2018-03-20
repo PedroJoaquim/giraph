@@ -2,7 +2,6 @@ package org.apache.giraph.examples.mssp;
 
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.log4j.Logger;
 
@@ -38,7 +37,7 @@ public class MSSPWorkerContext extends WorkerContext {
 
     @Override
     public void preSuperstep() {
-        this.currentEpoch = (int) this.<LongWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
+        this.currentEpoch =  this.<IntWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
     }
 
     @Override

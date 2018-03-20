@@ -1,8 +1,10 @@
 package org.apache.giraph.examples.mssp;
 
+import org.apache.giraph.aggregators.IntSumAggregator;
 import org.apache.giraph.aggregators.LongSumAggregator;
 import org.apache.giraph.aggregators.TextAppendAggregator;
 import org.apache.giraph.master.MasterCompute;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 
@@ -12,7 +14,7 @@ import java.io.IOException;
 
 public class MSSPMasterCompute extends MasterCompute {
 
-    private long maxEpoch;
+    private int maxEpoch;
 
     @Override
     public void compute() {
@@ -20,13 +22,13 @@ public class MSSPMasterCompute extends MasterCompute {
         long aggregatedValue = this.<LongWritable>getAggregatedValue(MultipleSourcesShortestPaths.MESSAGES_SENT_AGG).get();
 
         if(aggregatedValue == 0){
-            long currentEpoch = this.<LongWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
+            int currentEpoch = this.<IntWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
 
             if(currentEpoch == maxEpoch){
                 haltComputation();
             }
             else {
-                setAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG, new LongWritable(currentEpoch + 1));
+                setAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG, new IntWritable(currentEpoch + 1));
             }
         }
     }
@@ -35,13 +37,13 @@ public class MSSPMasterCompute extends MasterCompute {
     public void initialize() throws InstantiationException, IllegalAccessException {
 
         registerPersistentAggregator(MultipleSourcesShortestPaths.LANDMARK_VERTICES_AGG, TextAppendAggregator.class);
-        registerPersistentAggregator(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG, LongSumAggregator.class);
+        registerPersistentAggregator(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG, IntSumAggregator.class);
         registerAggregator(MultipleSourcesShortestPaths.MESSAGES_SENT_AGG, LongSumAggregator.class);
 
 
         StringBuilder aggregatorValue = new StringBuilder();
         long numVertices = getTotalNumVertices();
-        long numLandMarks = MultipleSourcesShortestPaths.NUM_LANDMARKS.get(getConf());
+        int numLandMarks = MultipleSourcesShortestPaths.NUM_LANDMARKS.get(getConf());
 
         this.maxEpoch = numLandMarks - 1;
 

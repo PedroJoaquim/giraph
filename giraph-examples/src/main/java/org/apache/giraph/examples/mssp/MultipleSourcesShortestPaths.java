@@ -1,6 +1,6 @@
 package org.apache.giraph.examples.mssp;
 
-import org.apache.giraph.conf.LongConfOption;
+import org.apache.giraph.conf.IntConfOption;
 import org.apache.giraph.examples.Algorithm;
 
 @Algorithm(
@@ -17,8 +17,8 @@ public class MultipleSourcesShortestPaths {
     public static final String CURRENT_EPOCH_AGG = "epoch";
 
     /** The shortest paths id */
-    public static final LongConfOption NUM_LANDMARKS =
-            new LongConfOption("MultipleShortestPaths.num.landmarks", 30,
+    public static final IntConfOption NUM_LANDMARKS =
+            new IntConfOption("MultipleShortestPaths.num.landmarks", 30,
                     "number of landmarks");
 
 
