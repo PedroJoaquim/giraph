@@ -361,6 +361,9 @@ public class GiraphApplicationMaster {
    */
   private void startContainerLaunchingThreads(final List<Container>
                                                       allocatedContainers) {
+
+    int minContainerID = readMinContainerId(allocatedContainers);
+
     for (Container allocatedContainer : allocatedContainers) {
       LOG.info("Launching command on a new container." +
               ", containerId=" + allocatedContainer.getId() +
@@ -372,9 +375,24 @@ public class GiraphApplicationMaster {
       // Launch and start the container on a separate thread to keep the main
       // thread unblocked as all containers may not be allocated at one go.
       LaunchContainerRunnable runnableLaunchContainer =
-              new LaunchContainerRunnable(allocatedContainer, containerListener);
+              new LaunchContainerRunnable(allocatedContainer, containerListener, minContainerID);
       executor.execute(runnableLaunchContainer);
     }
+  }
+
+  private int readMinContainerId(List<Container> allocatedContainers) {
+
+    int min = Integer.MAX_VALUE;
+
+    for (Container allocatedContainer : allocatedContainers) {
+      int currentId = allocatedContainer.getId().getId();
+
+      if(currentId < min){
+        min = currentId;
+      }
+    }
+
+    return min;
   }
 
   /**
@@ -458,6 +476,9 @@ public class GiraphApplicationMaster {
    * that will house one of our Giraph worker (or master) tasks.
    */
   private class LaunchContainerRunnable implements Runnable {
+
+    /** Min container id */
+    private int minContainerID;
     /** Allocated container */
     private Container container;
     /** NM listener */
@@ -469,9 +490,11 @@ public class GiraphApplicationMaster {
      * @param containerListener container listener.
      */
     public LaunchContainerRunnable(final Container newGiraphTaskContainer,
-                                   NMCallbackHandler containerListener) {
+                                   NMCallbackHandler containerListener,
+                                   final int minContainerID) {
       this.container = newGiraphTaskContainer;
       this.containerListener = containerListener;
+      this.minContainerID = minContainerID;
     }
 
     /**
@@ -543,6 +566,7 @@ public class GiraphApplicationMaster {
               appAttemptId.getApplicationId().getId() + " " +
               container.getId().getId() + " " +
               appAttemptId.getAttemptId() + " " +
+              (container.getId().getId() - minContainerID) + " " +
               "1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +
               "/task-" + container.getId().getId() + "-stdout.log " +
               "2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +

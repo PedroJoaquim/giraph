@@ -1284,5 +1284,16 @@ public interface GiraphConstants {
   StrConfOption EMR_MASTER_KEYS_NAME = new StrConfOption(
           "giraph.emr.master.keys.name", "giraph-keys",
           "debug");
+
+  /** Name of the file in hdfs the partition to worker assignment information */
+  StrConfOption PARTITION_ASSIGNMENT_FILE_PATH = new StrConfOption(
+          "giraph.partitionAssignmentFile", "partition-assignment.txt",
+          "file that describes the assignment between partitions and workers");
+
+  /** Name of the file in hdfs the vertices to partition assignment information */
+  StrConfOption VERTEX_ASSIGNMENT_FILE_PATH = new StrConfOption(
+          "giraph.vertexAssignmentFile", "vertex-assignment.txt",
+          "file that describes the assignment between vertex and partitions");
+
 }
 // CHECKSTYLE: resume InterfaceIsTypeCheck

@@ -64,8 +64,11 @@ public class CheckpointingUtils {
    */
   public static final String CHECKPOINT_FINALIZED_POSTFIX = ".finalized";
 
+  public static final String RESTART_CHECKPOINT_TIME_POSTFIX = ".restart";
+
   /** Class logger */
   private static final Logger LOG = Logger.getLogger(CheckpointingUtils.class);
+
 
   /**
    * Do not call constructor.
@@ -149,6 +152,10 @@ public class CheckpointingUtils {
     return Long.parseLong(checkpointString);
   }
 
+
+  public static Path getCheckpointRestartInfoFilePath(int workerID){
+    return new Path("checkpoint_" + workerID + RESTART_CHECKPOINT_TIME_POSTFIX);
+  }
 
   /**
    * Only get the finalized checkpoint files

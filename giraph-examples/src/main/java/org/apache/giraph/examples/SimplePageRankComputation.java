@@ -25,15 +25,14 @@ import org.apache.giraph.edge.Edge;
 import org.apache.giraph.edge.EdgeFactory;
 import org.apache.giraph.graph.BasicComputation;
 import org.apache.giraph.graph.Vertex;
+import org.apache.giraph.io.EdgeReader;
 import org.apache.giraph.io.VertexReader;
 import org.apache.giraph.io.formats.GeneratedVertexInputFormat;
+import org.apache.giraph.io.formats.TextEdgeInputFormat;
 import org.apache.giraph.io.formats.TextVertexOutputFormat;
 import org.apache.giraph.master.DefaultMasterCompute;
 import org.apache.giraph.worker.WorkerContext;
-import org.apache.hadoop.io.DoubleWritable;
-import org.apache.hadoop.io.FloatWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.log4j.Logger;
@@ -42,6 +41,7 @@ import com.google.common.collect.Lists;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Demonstrates the basic Pregel PageRank implementation.
@@ -78,9 +78,9 @@ public class SimplePageRankComputation extends BasicComputation<LongWritable,
       aggregate(MAX_AGG, vertexValue);
       aggregate(MIN_AGG, vertexValue);
       aggregate(SUM_AGG, new LongWritable(1));
-      LOG.info(vertex.getId() + ": PageRank=" + vertexValue +
+      /*LOG.info(vertex.getId() + ": PageRank=" + vertexValue +
           " max=" + getAggregatedValue(MAX_AGG) +
-          " min=" + getAggregatedValue(MIN_AGG));
+          " min=" + getAggregatedValue(MIN_AGG));*/
     }
 
     if (getSuperstep() < MAX_SUPERSTEPS) {
@@ -164,6 +164,7 @@ public class SimplePageRankComputation extends BasicComputation<LongWritable,
     @Override
     public void initialize() throws InstantiationException,
         IllegalAccessException {
+
       registerAggregator(SUM_AGG, LongSumAggregator.class);
       registerPersistentAggregator(MIN_AGG, DoubleMinAggregator.class);
       registerPersistentAggregator(MAX_AGG, DoubleMaxAggregator.class);

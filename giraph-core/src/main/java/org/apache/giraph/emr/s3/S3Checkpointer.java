@@ -18,7 +18,9 @@ public class S3Checkpointer extends S3Com{
 
     private static String MASTER_IP_JSON_ENTRY_NAME = "masterPrivateDnsName";
 
-    private static final String S3_DIST_CP_CMD_PREFIX = "s3-dist-cp --src /user/yarn/_bsp/_checkpoints/ --dest s3://inesc-giraph-emr//_bsp/_checkpoints/ --srcPattern=";
+    private static String CHECKPOINT_S3_PATH = "s3://inesc-giraph-emr/checkpoints/";
+
+    private static final String S3_DIST_CP_CMD_PREFIX = "s3-dist-cp --src /user/yarn/_bsp/_checkpoints/ --dest " + CHECKPOINT_S3_PATH + " --srcPattern=";
 
     public static void upload(long superstep, GiraphConfiguration giraphConf) throws IOException {
 
@@ -37,13 +39,20 @@ public class S3Checkpointer extends S3Com{
         LOG.info("s3-checkpoint-upload: emr master ip = " + emrMasterIP);
         LOG.info("s3-checkpoint-upload: s3 cp cmd = " + s3Command);
 
+        final String removePreviousCheckpointsCmd = "aws s3 rm " +
+                CHECKPOINT_S3_PATH +
+                " --recursive";
+
         Thread t = new Thread() {
             public void run() {
-                long start = System.currentTimeMillis();
+                long start0 = System.currentTimeMillis();
+                execProcess(removePreviousCheckpointsCmd, true, true, "cmd");
+                long start1 = System.currentTimeMillis();
                 execProcess("ssh -o StrictHostKeyChecking=no -i " + key + " hadoop@" + emrMasterIP + " " + s3Command, false, true, "cmd");
                 long end = System.currentTimeMillis();
 
-                LOG.info("analysis-checkpoint-s3: time = " + (end - start)/1000 + " seconds");
+                LOG.info("analysis-checkpoint-s3: time to delete = " + (start1 - start0)/1000 + " seconds");
+                LOG.info("analysis-checkpoint-s3: time to send = " + (end - start1)/1000 + " seconds");
             }
         };
 

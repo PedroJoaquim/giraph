@@ -22,15 +22,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Queue;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -47,6 +40,7 @@ import org.apache.giraph.comm.WorkerClientRequestProcessor;
 import org.apache.giraph.comm.WorkerServer;
 import org.apache.giraph.comm.aggregators.WorkerAggregatorRequestProcessor;
 import org.apache.giraph.comm.messages.MessageStore;
+import org.apache.giraph.comm.messages.primitives.IdByteArrayMessageStore;
 import org.apache.giraph.comm.messages.queue.AsyncMessageStoreWrapper;
 import org.apache.giraph.comm.netty.NettyWorkerAggregatorRequestProcessor;
 import org.apache.giraph.comm.netty.NettyWorkerClient;
@@ -83,6 +77,8 @@ import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.partition.PartitionStats;
 import org.apache.giraph.partition.PartitionStore;
 import org.apache.giraph.partition.WorkerGraphPartitioner;
+import org.apache.giraph.types.ops.collections.Basic2ObjectMap;
+import org.apache.giraph.types.ops.collections.WritableWriter;
 import org.apache.giraph.utils.BlockingElementsSet;
 import org.apache.giraph.utils.CallableFactory;
 import org.apache.giraph.utils.CheckpointingUtils;
@@ -92,6 +88,7 @@ import org.apache.giraph.utils.MemoryUtils;
 import org.apache.giraph.utils.ProgressableUtils;
 import org.apache.giraph.utils.ReactiveJMapHistoDumper;
 import org.apache.giraph.utils.WritableUtils;
+import org.apache.giraph.utils.io.DataInputOutput;
 import org.apache.giraph.zk.BspEvent;
 import org.apache.giraph.zk.PredicateLock;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -482,6 +479,8 @@ public class BspServiceWorker<I extends WritableComparable,
                     "checkpointed superstep " +
                     getSuperstep() + ", attempt " +
                     getApplicationAttempt());
+
+            LOG.info("debug-partitioning: restarting from superstep " + getSuperstep());
           }
           setRestartedSuperstep(getSuperstep());
           return new FinishedSuperstepStats(0, false, 0, 0, true,
@@ -499,6 +498,7 @@ public class BspServiceWorker<I extends WritableComparable,
             startSuperstep();
     workerGraphPartitioner.updatePartitionOwners(
             getWorkerInfo(), masterSetPartitionOwners);
+
     getPartitionStore().initialize();
 
 /*if[HADOOP_NON_SECURE]
@@ -1596,6 +1596,102 @@ else[HADOOP_NON_SECURE]*/
             " ms, using " + numThreads + " threads");
   }
 
+  private void loadCheckpointMessagesReset(final long superstep,
+                                           final List<Integer> previousPartitionsIds,
+                                           final List<Integer> myPartitionIds) {
+
+    int numThreads = Math.min(
+            GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
+            previousPartitionsIds.size());
+
+    final Queue<Integer> partitionIdQueue =
+            new ConcurrentLinkedQueue<>(previousPartitionsIds);
+
+    final CompressionCodec codec =
+            new CompressionCodecFactory(getConfiguration())
+                    .getCodec(new Path(
+                            GiraphConstants.CHECKPOINT_COMPRESSION_CODEC
+                                    .get(getConfiguration())));
+
+    long t0 = System.currentTimeMillis();
+
+    final HashMap<Integer, Basic2ObjectMap<I, DataInputOutput>> myMessageStores = new HashMap<>();
+
+    for (int myPartitionID : myPartitionIds) {
+      myMessageStores.put(myPartitionID, ((IdByteArrayMessageStore<I, Writable>) (getServerData().getCurrentMessageStore()))
+              .createPartitionObjectMap());
+    }
+
+    CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
+      @Override
+      public Callable<Void> newCallable(int callableId) {
+        return new Callable<Void>() {
+
+          @Override
+          public Void call() throws Exception {
+            while (!partitionIdQueue.isEmpty()) {
+              Integer partitionId = partitionIdQueue.poll();
+              if (partitionId == null) {
+                break;
+              }
+
+              Basic2ObjectMap<I, DataInputOutput> reader = ((IdByteArrayMessageStore<I, Writable>) (getServerData().getCurrentMessageStore()))
+                      .createPartitionObjectMap();
+
+              Path msgsPath =
+                      getSavedCheckpoint(superstep,   partitionId +
+                              CheckpointingUtils.CHECKPOINT_MESSAGES_POSTFIX);
+
+              FSDataInputStream msgsUncompressedStream =
+                      getFs().open(msgsPath);
+
+              DataInputStream msgsStream = codec == null ? msgsUncompressedStream :
+                      new DataInputStream(
+                              codec.createInputStream(msgsUncompressedStream));
+
+
+              int size = msgsStream.readInt();
+
+              //TODO: improve this mess
+              while (size-- > 0) {
+
+                Basic2ObjectMap<I, DataInputOutput>.Pair<I, DataInputOutput> pair =
+                        reader.readNextValueFromInputStream(msgsStream);
+
+                PartitionOwner partitionOwner = workerGraphPartitioner.getPartitionOwner(pair.getKey());
+
+                if(partitionOwner.getWorkerInfo().getTaskId() == getWorkerInfo().getTaskId()){
+                  Basic2ObjectMap<I, DataInputOutput> store
+                          = myMessageStores.get(partitionOwner.getPartitionId());
+
+                  synchronized (store){
+                    store.put(pair.getKey(), pair.getValue());
+                  }
+                }
+              }
+
+              msgsStream.close();
+              msgsUncompressedStream.close();
+            }
+            return null;
+          }
+        };
+      }
+    };
+
+    ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+            "load-vertices-%d", getContext());
+
+    for (int myPartitionID : myPartitionIds) {
+      ((IdByteArrayMessageStore<I, Writable>) (getServerData().getCurrentMessageStore()))
+              .addMapForPartition(myMessageStores.get(myPartitionID), myPartitionID);
+    }
+
+    LOG.info("Loaded checkpoint in " + (System.currentTimeMillis() - t0) +
+            " ms, using " + numThreads + " threads");
+
+  }
+
   /**
    * Load saved partitions in multiple threads.
    * @param superstep superstep to load
@@ -1667,6 +1763,115 @@ else[HADOOP_NON_SECURE]*/
 
   }
 
+  private void loadCheckpointVerticesReset(final long superstep,
+                                           final List<Integer> previousPartitionsIds,
+                                           final List<Integer> myPartitionIds) {
+
+    int numThreads = Math.min(
+            GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
+            previousPartitionsIds.size());
+
+    final Queue<Integer> partitionIdQueue =
+            new ConcurrentLinkedQueue<>(previousPartitionsIds);
+
+    final CompressionCodec codec =
+            new CompressionCodecFactory(getConfiguration())
+                    .getCodec(new Path(
+                            GiraphConstants.CHECKPOINT_COMPRESSION_CODEC
+                                    .get(getConfiguration())));
+
+    long t0 = System.currentTimeMillis();
+
+    final HashMap<Integer, Partition<I, V, E>> myPartitions = new HashMap<>();
+
+    for (Integer id: myPartitionIds) {
+      myPartitions.put(id, getConfiguration().createPartition(id, getContext()));
+    }
+
+    CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
+      @Override
+      public Callable<Void> newCallable(int callableId) {
+        return new Callable<Void>() {
+
+          @Override
+          public Void call() throws Exception {
+
+            HashMap<Integer, Partition<I, V, E>> threadLocalPartitions = new HashMap<>();
+
+            for (Integer id: myPartitionIds) {
+              threadLocalPartitions.put(id, getConfiguration().createPartition(id, getContext()));
+            }
+
+            while (!partitionIdQueue.isEmpty()) {
+
+              Integer partitionId = partitionIdQueue.poll();
+
+              if (partitionId == null) {
+                break;
+              }
+
+              Path verticesPath =
+                      getSavedCheckpoint(superstep,   partitionId +
+                              CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
+
+
+              FSDataInputStream verticesUncompressedStream =
+                      getFs().open(verticesPath);
+
+
+              DataInputStream verticesStream = codec == null ? verticesUncompressedStream :
+                      new DataInputStream(
+                              codec.createInputStream(verticesUncompressedStream));
+
+
+              //TODO: improve this mess
+
+              //ignore id
+              verticesStream.readInt();
+
+              //num vertices
+              int vertices = verticesStream.readInt();
+
+              for (int i = 0; i < vertices; ++i) {
+                Vertex<I, V, E> vertex =
+                        WritableUtils.readVertexFromDataInput(verticesStream, getConfiguration());
+
+                PartitionOwner partitionOwner = workerGraphPartitioner.getPartitionOwner(vertex.getId());
+
+                if(partitionOwner.getWorkerInfo().getTaskId() == getWorkerInfo().getTaskId()){
+                  threadLocalPartitions.get(partitionOwner.getPartitionId()).putVertex(vertex);
+                }
+              }
+
+              verticesStream.close();
+              verticesUncompressedStream.close();
+
+            }
+
+            for (Integer partitionID: myPartitionIds) {//TODO: if problems arise try make this synchronized although seems not to be necessary
+              myPartitions.get(partitionID).addPartition(threadLocalPartitions.get(partitionID));
+            }
+
+            return null;
+          }
+
+        };
+      }
+    };
+
+    ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+            "load-vertices-%d", getContext());
+
+    for (Partition<I, V, E> p : myPartitions.values()) {
+      getPartitionStore().addPartition(p);
+    }
+
+    LOG.info("Loaded checkpoint in " + (System.currentTimeMillis() - t0) +
+            " ms, using " + numThreads + " threads");
+
+  }
+
+
   /**
    * Load saved partitions in multiple threads.
    * @param superstep superstep to load
@@ -1707,7 +1912,6 @@ else[HADOOP_NON_SECURE]*/
                       getSavedCheckpoint(superstep,   partitionId +
                               CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
 
-
               FSDataInputStream verticesUncompressedStream =
                       getFs().open(verticesPath);
 
@@ -1719,6 +1923,8 @@ else[HADOOP_NON_SECURE]*/
 
               Partition<I, V, E> partition =
                       getConfiguration().createPartition(partitionId, getContext());
+
+
 
               partition.readFields(verticesStream);
 
@@ -1751,7 +1957,7 @@ else[HADOOP_NON_SECURE]*/
    * @param partitions list of partitions to load
    */
   private void loadCheckpointVerticeOld(final long superstep,
-                                      List<Integer> partitions) {
+                                        List<Integer> partitions) {
     int numThreads = Math.min(
             GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
             partitions.size());
@@ -1813,25 +2019,47 @@ else[HADOOP_NON_SECURE]*/
             " ms, using " + numThreads + " threads");
   }
 
-  //@Override
+  @Override
   public VertexEdgeCount loadCheckpoint(long superstep) {
 
-    List<Integer> partitionIds = new ArrayList<>();
+
+    List<Integer> myPartitionIds = new ArrayList<>();
+    List<Integer> previousPartitionsIds = new ArrayList<>();
+
+    long startCheckpointRestart = System.currentTimeMillis();
+
+    int previousNumberOfPartitions = readPreviousNumberOfPartitions(superstep);
+    int newNumberOfPartitions = workerGraphPartitioner.getPartitionOwners().size();
+
+    LOG.info("debug-checkpoint: previous number of partitions = " + previousNumberOfPartitions
+            + " new number of partitions = " + newNumberOfPartitions);
 
     for (PartitionOwner po: workerGraphPartitioner.getPartitionOwners()) {
       if(po.getWorkerInfo().getTaskId() == getWorkerInfo().getTaskId()){
         LOG.info("loadCheckpoint: loading partition " + po.getPartitionId() + " from checkpoint");
-        partitionIds.add(po.getPartitionId());
+        myPartitionIds.add(po.getPartitionId());
       }
+    }
+    
+    for (int i = 0; i < previousNumberOfPartitions; i++) {
+      previousPartitionsIds.add(i);
     }
 
     String finalizedCheckpointPath = getSavedCheckpointBasePath(superstep) +
             CheckpointingUtils.CHECKPOINT_FINALIZED_POSTFIX;
 
+    boolean resetPartitioning = newNumberOfPartitions != previousNumberOfPartitions;
+
+    LOG.info("debug-checkpoint: Loading checkpoint as " + (resetPartitioning ? "RESET" : "MICRO"));
 
     try {
 
-      loadCheckpointVertices(superstep, partitionIds);
+      if(resetPartitioning){
+        loadCheckpointVerticesReset(superstep, previousPartitionsIds, myPartitionIds);
+      }
+      else {
+        loadCheckpointVertices(superstep, myPartitionIds);
+      }
 
       getContext().progress();
 
@@ -1847,7 +2075,13 @@ else[HADOOP_NON_SECURE]*/
       getConfiguration().updateSuperstepClasses(superstepClasses);
       getServerData().resetMessageStores();
 
-      loadCheckpointMessages(superstep, partitionIds);
+      if(resetPartitioning){
+        loadCheckpointMessagesReset(superstep, previousPartitionsIds, myPartitionIds);
+      }
+      else {
+        loadCheckpointMessages(superstep, myPartitionIds);
+      }
+
 
       // Communication service needs to setup the connections prior to
       // processing vertices
@@ -1856,6 +2090,11 @@ else[HADOOP_NON_SECURE]*/
 else[HADOOP_NON_SECURE]*/
       workerClient.setup(getConfiguration().authenticate());
       /*end[HADOOP_NON_SECURE]*/
+
+      long endCheckpointRestart = System.currentTimeMillis();
+
+      writeRestartFromCheckpointTime((endCheckpointRestart - startCheckpointRestart) / 1000.0);
+
       return new VertexEdgeCount(globalStats.getVertexCount(),
               globalStats.getEdgeCount(), 0);
     } catch (IOException e) {
@@ -1863,6 +2102,50 @@ else[HADOOP_NON_SECURE]*/
               "loadCheckpoint: Failed for superstep=" + superstep, e);
     }
 
+  }
+
+  private void writeRestartFromCheckpointTime(double timeToReadCheckpoint) {
+
+    int workerID = getWorkerInfo().getTaskId();
+
+    Path path = CheckpointingUtils.getCheckpointRestartInfoFilePath(workerID);
+
+    LOG.info("debug-checkpoint: TIME TO RESTART FROM CHECKPOINT = " + timeToReadCheckpoint);
+
+    try {
+      FSDataOutputStream fileStream = getFs().create(path);
+      fileStream.writeDouble(timeToReadCheckpoint);
+      fileStream.close();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
+  }
+
+  private int readPreviousNumberOfPartitions(long superstep) {
+
+    int result = 0;
+
+    while (true){
+      Path verticesPath =
+              getSavedCheckpoint(superstep,   result +
+                      CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
+
+      try {
+        if(getFs().exists(verticesPath)){
+          result++;
+        }
+        else {
+          break;
+        }
+      } catch (IOException e) {
+        e.printStackTrace();
+        break;
+      }
+
+    }
+
+    return result;
   }
 
 
@@ -1962,11 +2245,14 @@ else[HADOOP_NON_SECURE]*/
     List<Entry<WorkerInfo, List<Integer>>> randomEntryList =
             new ArrayList<Entry<WorkerInfo, List<Integer>>>(
                     workerPartitionMap.entrySet());
+
     Collections.shuffle(randomEntryList);
+
     WorkerClientRequestProcessor<I, V, E> workerClientRequestProcessor =
             new NettyWorkerClientRequestProcessor<I, V, E>(getContext(),
                     getConfiguration(), this,
                     false /* useOneMessageToManyIdsEncoding */);
+
     for (Entry<WorkerInfo, List<Integer>> workerPartitionList :
             randomEntryList) {
       for (Integer partitionId : workerPartitionList.getValue()) {
@@ -2030,10 +2316,12 @@ else[HADOOP_NON_SECURE]*/
     PartitionExchange partitionExchange =
             workerGraphPartitioner.updatePartitionOwners(
                     getWorkerInfo(), masterSetPartitionOwners);
+
     workerClient.openConnections();
 
     Map<WorkerInfo, List<Integer>> sendWorkerPartitionMap =
             partitionExchange.getSendWorkerPartitionMap();
+
     if (!getPartitionStore().isEmpty()) {
       sendWorkerPartitions(sendWorkerPartitionMap);
     }

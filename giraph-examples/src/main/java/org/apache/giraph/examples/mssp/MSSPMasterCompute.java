@@ -1,0 +1,69 @@
+package org.apache.giraph.examples.mssp;
+
+import org.apache.giraph.aggregators.LongSumAggregator;
+import org.apache.giraph.aggregators.TextAppendAggregator;
+import org.apache.giraph.master.MasterCompute;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
+public class MSSPMasterCompute extends MasterCompute {
+
+    private long maxEpoch;
+
+    @Override
+    public void compute() {
+
+        long aggregatedValue = this.<LongWritable>getAggregatedValue(MultipleSourcesShortestPaths.MESSAGES_SENT_AGG).get();
+
+        if(aggregatedValue == 0){
+            long currentEpoch = this.<LongWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
+
+            if(currentEpoch == maxEpoch){
+                haltComputation();
+            }
+            else {
+                setAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG, new LongWritable(currentEpoch + 1));
+            }
+        }
+    }
+
+    @Override
+    public void initialize() throws InstantiationException, IllegalAccessException {
+
+        registerPersistentAggregator(MultipleSourcesShortestPaths.LANDMARK_VERTICES_AGG, TextAppendAggregator.class);
+        registerPersistentAggregator(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG, LongSumAggregator.class);
+        registerAggregator(MultipleSourcesShortestPaths.MESSAGES_SENT_AGG, LongSumAggregator.class);
+
+
+        StringBuilder aggregatorValue = new StringBuilder();
+        long numVertices = getTotalNumVertices();
+        long numLandMarks = MultipleSourcesShortestPaths.NUM_LANDMARKS.get(getConf());
+
+        this.maxEpoch = numLandMarks - 1;
+
+        long inc = (numVertices / numLandMarks) - 100;
+
+        aggregatorValue.append(0);
+
+        for (int i = 1; i < numLandMarks; i++) {
+            aggregatorValue.append(MultipleSourcesShortestPaths.AGGREGATOR_SEPARATOR).append(i * inc);
+        }
+
+        setAggregatedValue(MultipleSourcesShortestPaths.LANDMARK_VERTICES_AGG, new Text(aggregatorValue.toString()));
+
+    }
+
+    @Override
+    public void write(DataOutput dataOutput) throws IOException {
+
+    }
+
+    @Override
+    public void readFields(DataInput dataInput) throws IOException {
+
+    }
+}

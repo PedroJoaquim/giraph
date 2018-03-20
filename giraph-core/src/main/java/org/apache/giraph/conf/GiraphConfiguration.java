@@ -1289,4 +1289,20 @@ public class GiraphConfiguration extends Configuration
   public String getEmrMasterKeysName(){
     return EMR_MASTER_KEYS_NAME.get(this);
   }
+
+  public String getPartitionAssignmentPath(){
+    return PARTITION_ASSIGNMENT_FILE_PATH.get(this);
+  }
+
+  public void setPartitionAssignmentPath(String path){
+    PARTITION_ASSIGNMENT_FILE_PATH.set(this, path);
+  }
+
+  public String getVertexAssignmentPath(){
+    return VERTEX_ASSIGNMENT_FILE_PATH.get(this);
+  }
+
+  public void setVertexAssignmentPath(String path){
+    VERTEX_ASSIGNMENT_FILE_PATH.set(this, path);
+  }
 }

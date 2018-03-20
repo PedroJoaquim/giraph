@@ -26,15 +26,21 @@ import org.apache.giraph.counters.GiraphTimers;
 import org.apache.giraph.emr.s3.S3InfoSender;
 import org.apache.giraph.graph.Computation;
 import org.apache.giraph.metrics.GiraphMetrics;
+import org.apache.giraph.utils.CheckpointingUtils;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Mapper.Context;
 import org.apache.log4j.Logger;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.TreeMap;
 
+import static org.apache.giraph.conf.GiraphConstants.RESTART_JOB_ID;
 import static org.apache.giraph.conf.GiraphConstants.USE_SUPERSTEP_COUNTERS;
 
 /**
@@ -108,12 +114,14 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
         initializeMillis = System.currentTimeMillis();
         GiraphTimers.getInstance().getInitializeMs().increment(
             initializeMillis - startMillis);
-        // Attempt to create InputSplits if necessary. Bail out if that fails.
+        // Attempt to create InputSplits if xnecessary. Bail out if that fails.
+
         if (bspServiceMaster.getRestartedSuperstep() !=
             BspService.UNSET_SUPERSTEP ||
             (bspServiceMaster.createMappingInputSplits() != -1 &&
                 bspServiceMaster.createVertexInputSplits() != -1 &&
                 bspServiceMaster.createEdgeInputSplits() != -1)) {
+
           long setupMillis = System.currentTimeMillis() - initializeMillis;
           GiraphTimers.getInstance().getSetupMs().increment(setupMillis);
           setupSecs = setupMillis / 1000.0d;
@@ -184,7 +192,9 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
           LOG.info("shutdown: Took " + shutdownSecs + " seconds.");
           LOG.info("total: Took " + totalSecs + " seconds.");
 
-          S3InfoSender.uploadInfoToS3(setupSecs, superstepSecsMap, shutdownSecs, totalSecs);
+          double timeToReadCheckpoint  = readTimeToRestartFromCheckpoint();
+
+          S3InfoSender.uploadInfoToS3(setupSecs, superstepSecsMap, timeToReadCheckpoint, shutdownSecs, totalSecs);
         }
         GiraphTimers.getInstance().getTotalMs().
           increment(System.currentTimeMillis() - initializeMillis);
@@ -199,5 +209,50 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
       bspServiceMaster.failureCleanup(e);
       throw new IllegalStateException(e);
     }
+  }
+
+  private double readTimeToRestartFromCheckpoint() {
+
+    double result = -1;
+
+    if(RESTART_JOB_ID.get(bspServiceMaster.getConfiguration()) != null){
+      try {
+
+        FileSystem fs = FileSystem.get(bspServiceMaster.getConfiguration());
+
+        int workerId = 0;
+        double maxValue = 0;
+
+        while (true){
+
+          Path currentWorkerPath = CheckpointingUtils.getCheckpointRestartInfoFilePath(++workerId);
+
+          if(!fs.exists(currentWorkerPath)) break;
+
+          FSDataInputStream fileStream =
+                  fs.open(currentWorkerPath);
+
+          double currentValue = fileStream.readDouble();
+
+          if(currentValue > maxValue){
+            maxValue = currentValue;
+          }
+
+          fileStream.close();
+
+        }
+
+        LOG.info("debug-checkpoint: sampled read checkpoint times from: " + (workerId - 1));
+
+        result = maxValue;
+
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+
+
+    return result;
   }
 }

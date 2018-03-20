@@ -841,6 +841,7 @@ end[PURE_YARN]*/
       if (LOG.isInfoEnabled()) {
         LOG.info("execute: Loading from checkpoint " + superstep);
       }
+
       VertexEdgeCount vertexEdgeCount = serviceWorker.loadCheckpoint(
         serviceWorker.getRestartedSuperstep());
       finishedSuperstepStats = new FinishedSuperstepStats(0, false,

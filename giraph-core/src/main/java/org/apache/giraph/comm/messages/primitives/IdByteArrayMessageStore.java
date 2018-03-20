@@ -255,6 +255,10 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
   @Override
   public void writePartition(DataOutput out, int partitionId)
     throws IOException {
+    for (int id : map.keySet()) {
+      LOG.info("debug-partitioning: vertex messages container = " + map.get(id).getClass());
+    }
+
     Basic2ObjectMap<I, DataInputOutput> partitionMap = map.get(partitionId);
     partitionMap.write(out);
   }
@@ -262,12 +266,25 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
   @Override
   public void readFieldsForPartition(DataInput in, int partitionId)
     throws IOException {
+
     Basic2ObjectMap<I, DataInputOutput> partitionMap =
         idTypeOps.create2ObjectOpenHashMap(dataInputOutputWriter);
+
     partitionMap.readFields(in);
+
     synchronized (map) {
       map.put(partitionId, partitionMap);
     }
+  }
+
+  public void addMapForPartition(Basic2ObjectMap<I, DataInputOutput> partitionMap, int partitionId){ //TODO: REMOVE
+    synchronized (map) {
+      map.put(partitionId, partitionMap);
+    }
+  }
+
+  public Basic2ObjectMap<I, DataInputOutput> createPartitionObjectMap (){ //TODO: REMOVE
+    return idTypeOps.create2ObjectOpenHashMap(dataInputOutputWriter);
   }
 
   @Override
@@ -278,4 +295,5 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
   public boolean isPointerListEncoding() {
     return false;
   }
+
 }

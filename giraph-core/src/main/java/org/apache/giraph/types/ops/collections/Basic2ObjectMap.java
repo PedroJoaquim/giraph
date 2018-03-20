@@ -32,6 +32,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Map;
 
 import org.apache.giraph.types.ops.IntTypeOps;
 import org.apache.giraph.types.ops.LongTypeOps;
@@ -116,6 +117,29 @@ public abstract class Basic2ObjectMap<K, V> implements Writable {
    * @return Iterator
    */
   public abstract Collection<V> values();
+
+  //TODO REMOVE
+  public abstract Pair<K, V> readNextValueFromInputStream(DataInput in) throws IOException;
+
+
+  public class Pair<K2, V2>{
+
+    private K2 key;
+    private V2 value;
+
+    public Pair(K2 key, V2 value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    public K2 getKey() {
+      return key;
+    }
+
+    public V2 getValue() {
+      return value;
+    }
+  }
 
   /**
    * Iterator that reuses key object.
@@ -240,6 +264,11 @@ public abstract class Basic2ObjectMap<K, V> implements Writable {
     }
 
     @Override
+    public Pair<IntWritable, V> readNextValueFromInputStream(DataInput in) {
+      return null; //TODO: remove
+    }
+
+    @Override
     public void write(DataOutput out) throws IOException {
       out.writeInt(map.size());
       ObjectIterator<Int2ObjectMap.Entry<V>> iterator =
@@ -357,6 +386,15 @@ public abstract class Basic2ObjectMap<K, V> implements Writable {
     }
 
     @Override
+    public Pair<LongWritable, V> readNextValueFromInputStream(DataInput in) throws IOException {
+
+      long key = in.readLong();
+      V value = valueWriter.readFields(in);
+
+      return new Pair<LongWritable, V>(new LongWritable(key), value);
+    }
+
+    @Override
     public void write(DataOutput out) throws IOException {
       Preconditions.checkState(
         valueWriter != null,
@@ -364,8 +402,10 @@ public abstract class Basic2ObjectMap<K, V> implements Writable {
       );
 
       out.writeInt(map.size());
+
       ObjectIterator<Long2ObjectMap.Entry<V>> iterator =
           map.long2ObjectEntrySet().fastIterator();
+
       while (iterator.hasNext()) {
         Long2ObjectMap.Entry<V> entry = iterator.next();
         out.writeLong(entry.getLongKey());
@@ -483,6 +523,11 @@ public abstract class Basic2ObjectMap<K, V> implements Writable {
     @Override
     public Collection<V> values() {
       return map.values();
+    }
+
+    @Override
+    public Pair<K, V> readNextValueFromInputStream(DataInput in) throws IOException {
+      return null; //TODO
     }
 
     @Override

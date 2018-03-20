@@ -17,12 +17,6 @@ public class S3Com {
 
     private static String keyFileName;
 
-    private static final String[] CLUSTER_INFO_CMD  = {
-            "/bin/sh",
-            "-c",
-            "cat /mnt/var/lib/info/job-flow.json | jq -r '.%s'"
-    };
-
     protected static String downloadKeyFile(GiraphConfiguration giraphConf){
 
         if(!downloadKeyPair){
@@ -39,14 +33,20 @@ public class S3Com {
 
     protected static String readClusterInfo(String jsonEntryName){
 
+        String[] clusterInfoCMD  = {
+                "/bin/sh",
+                "-c",
+                "cat /mnt/var/lib/info/job-flow.json | jq -r '.%s'"
+        };
+
         String targetInfo = "";
 
-        CLUSTER_INFO_CMD[2] = String.format(CLUSTER_INFO_CMD[2], jsonEntryName);
+        clusterInfoCMD[2] = String.format(clusterInfoCMD[2], jsonEntryName);
 
         try {
             Runtime rt = Runtime.getRuntime();
 
-            Process p = rt.exec(CLUSTER_INFO_CMD);
+            Process p = rt.exec(clusterInfoCMD);
 
             BufferedReader stdInput = new BufferedReader(new
                     InputStreamReader(p.getInputStream()));

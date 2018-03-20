@@ -57,11 +57,7 @@ import org.apache.giraph.metrics.GiraphTimerContext;
 import org.apache.giraph.metrics.ResetSuperstepMetricsObserver;
 import org.apache.giraph.metrics.SuperstepMetricsRegistry;
 import org.apache.giraph.metrics.WorkerSuperstepMetrics;
-import org.apache.giraph.partition.BasicPartitionOwner;
-import org.apache.giraph.partition.MasterGraphPartitioner;
-import org.apache.giraph.partition.PartitionOwner;
-import org.apache.giraph.partition.PartitionStats;
-import org.apache.giraph.partition.PartitionUtils;
+import org.apache.giraph.partition.*;
 import org.apache.giraph.time.SystemTime;
 import org.apache.giraph.time.Time;
 import org.apache.giraph.utils.CheckpointingUtils;
@@ -667,6 +663,7 @@ public class BspServiceMaster<I extends WritableComparable,
     if (!getConfiguration().hasMappingInputFormat()) {
       return 0;
     }
+    LOG.info("debug-partitioning: run createMappingInputSplits");
     MappingInputFormat<I, V, E, ? extends Writable> mappingInputFormat =
             getConfiguration().createWrappedMappingInputFormat();
     return createInputSplits(mappingInputFormat, InputType.MAPPING);
@@ -679,6 +676,7 @@ public class BspServiceMaster<I extends WritableComparable,
       VertexInputFormat<I, V, E> vertexInputFormat =
               getConfiguration().createWrappedVertexInputFormat();
       splits = createInputSplits(vertexInputFormat, InputType.VERTEX);
+      LOG.info("debug-partitioning: run createVertexInputSplits splits = " + splits);
     }
     MasterProgress.get().setVertexInputSplitCount(splits);
     getJobProgressTracker().updateMasterProgress(MasterProgress.get());
@@ -689,9 +687,11 @@ public class BspServiceMaster<I extends WritableComparable,
   public int createEdgeInputSplits() {
     int splits = 0;
     if (getConfiguration().hasEdgeInputFormat()) {
+
       EdgeInputFormat<I, E> edgeInputFormat =
               getConfiguration().createWrappedEdgeInputFormat();
       splits = createInputSplits(edgeInputFormat, InputType.EDGE);
+      LOG.info("debug-partitioning: run createEdgeInputSplits splits = " + splits);
     }
     MasterProgress.get().setEdgeInputSplitsCount(splits);
     getJobProgressTracker().updateMasterProgress(MasterProgress.get());
@@ -731,7 +731,7 @@ public class BspServiceMaster<I extends WritableComparable,
    * @throws KeeperException
    * @return Collection of generated partition owners.
    */
-  private Collection<PartitionOwner> prepareCheckpointRestartOld(long superstep)
+  private Collection<PartitionOwner> prepareCheckpointRestartOldOld(long superstep)
           throws IOException, KeeperException, InterruptedException {
     List<PartitionOwner> partitionOwners = new ArrayList<>();
     FileSystem fs = getFs();
@@ -795,54 +795,70 @@ public class BspServiceMaster<I extends WritableComparable,
    *
    * @param superstep Checkpoint set to examine.
    * @throws IOException
-   * @throws InterruptedException
-   * @throws KeeperException
    * @return Collection of generated partition owners.
    */
   private Collection<PartitionOwner> prepareCheckpointRestart(long superstep)
-          throws IOException, KeeperException, InterruptedException {
+          throws IOException {
+
     List<PartitionOwner> partitionOwners = new ArrayList<>();
+
+    int newNumPartitions = PartitionUtils.computePartitionCount(
+            chosenWorkerInfoList.size(), getConfiguration());
+
     FileSystem fs = getFs();
+
     String finalizedCheckpointPath = getSavedCheckpointBasePath(superstep) +
             CheckpointingUtils.CHECKPOINT_FINALIZED_POSTFIX;
+
     LOG.info("Loading checkpoint from " + finalizedCheckpointPath);
+
     DataInputStream finalizedStream =
             fs.open(new Path(finalizedCheckpointPath));
+
     GlobalStats globalStats = new GlobalStats();
     globalStats.readFields(finalizedStream);
     updateCounters(globalStats);
+
     SuperstepClasses superstepClasses =
             SuperstepClasses.createToRead(getConfiguration());
+
     superstepClasses.readFields(finalizedStream);
+
     getConfiguration().updateSuperstepClasses(superstepClasses);
+
     int prefixFileCount = finalizedStream.readInt();
 
     String checkpointFile =
             finalizedStream.readUTF();
 
-    int currentWorker = 0;
+    int previousNumberOfPartitions = 0;
 
     for (int i = 0; i < prefixFileCount; ++i) {
       int mrTaskId = finalizedStream.readInt();
 
       DataInputStream metadataStream = fs.open(new Path(checkpointFile +
               "." + mrTaskId + CheckpointingUtils.CHECKPOINT_METADATA_POSTFIX));
-      long partitions = metadataStream.readInt();
 
-      for (long p = 0; p < partitions; ++p) {
-        int partitionId = metadataStream.readInt();
+      previousNumberOfPartitions += metadataStream.readInt();
 
-        WorkerInfo worker = getWorkerInfoList().get(currentWorker);
-        currentWorker = (currentWorker + 1) % getWorkerInfoList().size();//TODO
-
-        PartitionOwner partitionOwner = new BasicPartitionOwner(partitionId,
-                worker);
-        partitionOwners.add(partitionOwner);
-        LOG.info("prepareCheckpointRestart partitionId=" + partitionId +
-                " assigned to " + partitionOwner);
-      }
       metadataStream.close();
     }
+
+    LOG.info("debug-checkpoint: previous number of partitions = " + previousNumberOfPartitions);
+
+    int numWorkers = getWorkerInfoList().size();
+
+    for (int p = 0; p < newNumPartitions; ++p) {
+
+      int workerIndex = getGraphPartitionerFactory().getWorker(p, newNumPartitions, numWorkers);
+      WorkerInfo worker = getWorkerInfoList().get(workerIndex);
+      
+      PartitionOwner partitionOwner = new BasicPartitionOwner(p, worker);
+
+      partitionOwners.add(partitionOwner);
+
+    }
+
     //Ordering appears to be important as of right now we rely on this ordering
     //in WorkerGraphPartitioner
     Collections.sort(partitionOwners, new Comparator<PartitionOwner>() {
@@ -1176,8 +1192,11 @@ public class BspServiceMaster<I extends WritableComparable,
    * checkpoint file.
    */
   private void assignPartitionOwners() {
+
     Collection<PartitionOwner> partitionOwners;
+
     if (getSuperstep() == INPUT_SUPERSTEP) {
+
       partitionOwners =
               masterGraphPartitioner.createInitialPartitionOwners(
                       chosenWorkerInfoList, maxWorkers);
@@ -1189,22 +1208,19 @@ public class BspServiceMaster<I extends WritableComparable,
                 "assignAndExchangePartitions: No partition owners set");
       }
     } else if (getRestartedSuperstep() == getSuperstep()) {
+
       // If restarted, prepare the checkpoint restart
       try {
+
         partitionOwners = prepareCheckpointRestart(getSuperstep());
+
       } catch (IOException e) {
         throw new IllegalStateException(
                 "assignPartitionOwners: IOException on preparing", e);
-      } catch (KeeperException e) {
-        throw new IllegalStateException(
-                "assignPartitionOwners: KeeperException on preparing", e);
-      } catch (InterruptedException e) {
-        throw new IllegalStateException(
-                "assignPartitionOwners: InteruptedException on preparing",
-                e);
       }
       masterGraphPartitioner.setPartitionOwners(partitionOwners);
     } else {
+
       partitionOwners =
               masterGraphPartitioner.generateChangedPartitionOwners(
                       allPartitionStatsList,
@@ -1215,9 +1231,8 @@ public class BspServiceMaster<I extends WritableComparable,
       PartitionUtils.analyzePartitionStats(partitionOwners,
               allPartitionStatsList);
     }
+
     checkPartitions(masterGraphPartitioner.getCurrentPartitionOwners());
-
-
 
     // There will be some exchange of partitions
     if (!partitionOwners.isEmpty()) {
@@ -1252,6 +1267,8 @@ public class BspServiceMaster<I extends WritableComparable,
               new AddressesAndPartitionsRequest(addressesAndPartitions));
     }
   }
+
+
 
   /**
    * Check if partition ids are valid
@@ -1643,6 +1660,9 @@ public class BspServiceMaster<I extends WritableComparable,
     // 5. Create superstep finished node
     // 6. If the checkpoint frequency is met, finalize the checkpoint
 
+
+
+
     for (MasterObserver observer : observers) {
       observer.preSuperstep(getSuperstep());
       getContext().progress();
@@ -1683,6 +1703,7 @@ public class BspServiceMaster<I extends WritableComparable,
 
     GiraphStats.getInstance().
             getCurrentWorkers().setValue(chosenWorkerInfoList.size());
+
     assignPartitionOwners();
 
     // Finalize the valid checkpoint file prefixes and possibly
@@ -1925,7 +1946,7 @@ public class BspServiceMaster<I extends WritableComparable,
                   maxTasks  +  " desired children from " +
                   cleanedUpPath);
         }
-        if (cleanedUpChildrenList.size() == maxTasks) {
+        if (cleanedUpChildrenList.size() >= maxTasks) {
           break;
         }
         if (LOG.isInfoEnabled()) {

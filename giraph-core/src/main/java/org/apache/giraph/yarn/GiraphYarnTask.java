@@ -174,7 +174,7 @@ public class GiraphYarnTask<I extends WritableComparable, V extends Writable,
    */
   @SuppressWarnings("rawtypes")
   public static void main(String[] args) {
-    if (args.length != 4) {
+    if (args.length != 5) {
       throw new IllegalStateException("GiraphYarnTask could not construct " +
         "a TaskAttemptID for the Giraph job from args: " + printArgs(args));
     }
@@ -207,7 +207,7 @@ public class GiraphYarnTask<I extends WritableComparable, V extends Writable,
       args[0], // YARN ApplicationId Cluster Timestamp
       Integer.parseInt(args[1]), // YARN ApplicationId #
       TaskID.getTaskType('m'),  // Make Giraph think this is a Mapper task.
-      Integer.parseInt(args[2]) - 2, // YARN ContainerId MINUS TWO (see above)
+      Integer.parseInt(args[4]), // YARN ContainerId MINUS TWO (see above)
       Integer.parseInt(args[3])); // YARN AppAttemptId #
   }
 

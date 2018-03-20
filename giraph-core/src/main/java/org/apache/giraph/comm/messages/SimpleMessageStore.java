@@ -30,8 +30,10 @@ import java.util.concurrent.ConcurrentMap;
 
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.factories.MessageValueFactory;
+import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
+import org.apache.log4j.Logger;
 
 /**
  * Abstract class for {@link MessageStore} which allows any kind
@@ -54,6 +56,7 @@ public abstract class SimpleMessageStore<I extends WritableComparable,
   /** Giraph configuration */
   protected final ImmutableClassesGiraphConfiguration<I, ?, ?> config;
 
+  private static final Logger LOG = Logger.getLogger(SimpleMessageStore.class);
   /**
    * Constructor
    *
@@ -185,7 +188,13 @@ public abstract class SimpleMessageStore<I extends WritableComparable,
   @Override
   public void readFieldsForPartition(DataInput in,
       int partitionId) throws IOException {
+
+    LOG.info("debug-partitioning: readFieldsForPartition = im in read fields for partition T class = " + map.getClass());
+
     if (in.readBoolean()) {
+
+      LOG.info("debug-partitioning: readFieldsForPartition = its true");
+
       ConcurrentMap<I, T> partitionMap = Maps.newConcurrentMap();
       int numVertices = in.readInt();
       for (int v = 0; v < numVertices; v++) {
