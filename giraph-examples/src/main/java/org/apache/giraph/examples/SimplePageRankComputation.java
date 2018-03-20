@@ -67,6 +67,7 @@ public class SimplePageRankComputation extends BasicComputation<LongWritable,
   public void compute(
       Vertex<LongWritable, DoubleWritable, FloatWritable> vertex,
       Iterable<DoubleWritable> messages) throws IOException {
+
     if (getSuperstep() >= 1) {
       double sum = 0;
       for (DoubleWritable message : messages) {

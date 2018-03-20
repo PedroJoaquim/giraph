@@ -5,9 +5,13 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.log4j.Logger;
 
+import java.util.HashSet;
+
 public class MSSPWorkerContext extends WorkerContext {
 
-    private long[] landmarks;
+    private HashSet<Long> futureLandmarks;
+
+    private Long[] landmarksArray;
 
     private int currentEpoch;
 
@@ -23,11 +27,35 @@ public class MSSPWorkerContext extends WorkerContext {
 
         String[] splited = aggregatedValue.toString().split(MultipleSourcesShortestPaths.AGGREGATOR_SEPARATOR);
 
-        this.landmarks = new long[splited.length];
+        this.currentEpoch = 0;
+
+        this.landmarksArray = new Long[splited.length];
+
+        this.futureLandmarks = new HashSet<Long>();
 
         for (int i = 0; i < splited.length; i++) {
-            this.landmarks[i] = Long.parseLong(splited[i]);
+            this.landmarksArray[i] = Long.parseLong(splited[i]);
+
+            if(i > 0){
+                this.futureLandmarks.add(this.landmarksArray[i]);
+            }
         }
+    }
+
+    protected boolean isFutureLandmark(Long vertexID){
+        return this.futureLandmarks.contains(vertexID);
+    }
+
+    protected boolean isSourceVertexForCurrentEpoch(Long vertexID){
+        return this.landmarksArray[this.currentEpoch].equals(vertexID);
+    }
+
+    protected int getCurrentEpoch(){
+        return this.currentEpoch;
+    }
+
+    protected int getNumLandmarks(){
+        return this.landmarksArray.length;
     }
 
     @Override
@@ -37,7 +65,18 @@ public class MSSPWorkerContext extends WorkerContext {
 
     @Override
     public void preSuperstep() {
-        this.currentEpoch =  this.<IntWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
+        int newEpoch =  this.<IntWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
+
+        if(newEpoch != this.currentEpoch){
+
+            this.currentEpoch = newEpoch;
+
+            this.futureLandmarks = new HashSet<Long>();
+
+            for (int i = newEpoch + 1; i < this.landmarksArray.length; i++) {
+                this.futureLandmarks.add(this.landmarksArray[i]);
+            }
+        }
     }
 
     @Override
