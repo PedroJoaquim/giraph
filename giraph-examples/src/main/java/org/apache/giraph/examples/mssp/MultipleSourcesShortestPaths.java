@@ -3,17 +3,15 @@ package org.apache.giraph.examples.mssp;
 import org.apache.giraph.conf.IntConfOption;
 import org.apache.giraph.edge.Edge;
 import org.apache.giraph.examples.Algorithm;
-import org.apache.giraph.examples.SimpleShortestPathsComputation;
 import org.apache.giraph.graph.BasicComputation;
 import org.apache.giraph.graph.Vertex;
-import org.apache.hadoop.io.ArrayWritable;
+import org.apache.giraph.utils.ArrayWritable;
 import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
-import java.util.Arrays;
 
 @Algorithm(
         name = "Multiple Source Shortest paths",
@@ -21,7 +19,7 @@ import java.util.Arrays;
 )
 
 public class MultipleSourcesShortestPaths
-        extends BasicComputation<LongWritable, ArrayWritable, NullWritable, DoubleWritable>{
+        extends BasicComputation<LongWritable, ArrayWritable<DoubleWritable>, NullWritable, DoubleWritable>{
 
     public static final String LANDMARK_VERTICES_AGG = "landmarks";
 
@@ -34,6 +32,11 @@ public class MultipleSourcesShortestPaths
             new IntConfOption("MultipleShortestPaths.numLandmarks", 30,
                     "number of landmarks");
 
+    /** ing on landmark id */
+    public static final IntConfOption INC_LANDMARKS =
+            new IntConfOption("MultipleShortestPaths.incLandmarks", 100,
+                    "inc for landmark id");
+
     /** Class logger */
     private static final Logger LOG =
             Logger.getLogger(MultipleSourcesShortestPaths.class);
@@ -42,18 +45,18 @@ public class MultipleSourcesShortestPaths
     public static final String AGGREGATOR_SEPARATOR = "#";
 
     @Override
-    public void compute(Vertex<LongWritable, ArrayWritable, NullWritable> vertex, Iterable<DoubleWritable> messages)
+    public void compute(Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex, Iterable<DoubleWritable> messages)
             throws IOException {
+
 
         MSSPWorkerContext workerContext = this.<MSSPWorkerContext>getWorkerContext();
 
-        if(getSuperstep() == 0){
-            DoubleWritable[] initialValues = new DoubleWritable[workerContext.getNumLandmarks()];
-            Arrays.fill(initialValues, new DoubleWritable(Double.MAX_VALUE));
-
-            vertex.setValue(new ArrayWritable(DoubleWritable.class, initialValues));
+        if(LOG.isDebugEnabled()){
+            LOG.debug("debug-mssp: vertex = " + vertex.getId().get() + " superstep = " + getSuperstep());
+            LOG.debug("debug-mssp: current epoch = " + workerContext.getCurrentEpoch() + " is source = " + workerContext.isSourceVertexForCurrentEpoch(vertex.getId().get()));
+            LOG.debug("debug-mssp: current epoch value = " + getCurrentEpochValue(vertex, workerContext));
         }
-
+        
         double minDist =
                 workerContext.isSourceVertexForCurrentEpoch(vertex.getId().get()) ? 0d : Double.MAX_VALUE;
 
@@ -63,20 +66,17 @@ public class MultipleSourcesShortestPaths
 
         if (minDist < getCurrentEpochValue(vertex, workerContext)) {
             setValue(new DoubleWritable(minDist), vertex, workerContext);
-            for (Edge<LongWritable, NullWritable> edge : vertex.getEdges()) {
-                double distance = minDist + 1;
-                if (LOG.isDebugEnabled()) {
-                    LOG.debug("Vertex " + vertex.getId() + " sent to " +
-                            edge.getTargetVertexId() + " = " + distance);
-                }
-                sendMessage(edge.getTargetVertexId(), new DoubleWritable(distance));
-            }
+
+            double distance = minDist + 1;
+            sendMessageToAllEdges(vertex, new DoubleWritable(distance));
+
+            aggregate(MESSAGES_SENT_AGG, new LongWritable(vertex.getNumEdges()));
         }
 
         voteToHaltIfNecessary(vertex, workerContext);
     }
 
-    private void voteToHaltIfNecessary(Vertex<LongWritable, ArrayWritable, NullWritable> vertex,
+    private void voteToHaltIfNecessary(Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex,
                                        MSSPWorkerContext workerContext) {
 
         /*
@@ -88,18 +88,18 @@ public class MultipleSourcesShortestPaths
     }
 
     private void setValue(DoubleWritable newValue,
-                          Vertex<LongWritable, ArrayWritable, NullWritable> vertex, MSSPWorkerContext workerContext) {
+                          Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex, MSSPWorkerContext workerContext) {
 
         int currentEpoch = workerContext.getCurrentEpoch();
 
-        ((DoubleWritable[]) vertex.getValue().get())[currentEpoch] = newValue;
+        vertex.getValue().get()[currentEpoch] = newValue;
     }
 
-    public Double getCurrentEpochValue(Vertex<LongWritable, ArrayWritable, NullWritable> vertex,
+    private Double getCurrentEpochValue(Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex,
                                        MSSPWorkerContext workerContext){
 
         int currentEpoch = workerContext.getCurrentEpoch();
 
-        return ((DoubleWritable[]) vertex.getValue().get())[currentEpoch].get();
+        return vertex.getValue().get()[currentEpoch].get();
     }
 }

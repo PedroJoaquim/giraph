@@ -42,14 +42,14 @@ public class MSSPMasterCompute extends MasterCompute {
 
 
         StringBuilder aggregatorValue = new StringBuilder();
-        long numVertices = getTotalNumVertices();
+
         int numLandMarks = MultipleSourcesShortestPaths.NUM_LANDMARKS.get(getConf());
 
         this.maxEpoch = numLandMarks - 1;
 
-        long inc = (numVertices / numLandMarks) - 100;
+        long inc = MultipleSourcesShortestPaths.INC_LANDMARKS.get(getConf());
 
-        aggregatorValue.append(0);
+        aggregatorValue.append(1);
 
         for (int i = 1; i < numLandMarks; i++) {
             aggregatorValue.append(MultipleSourcesShortestPaths.AGGREGATOR_SEPARATOR).append(i * inc);
