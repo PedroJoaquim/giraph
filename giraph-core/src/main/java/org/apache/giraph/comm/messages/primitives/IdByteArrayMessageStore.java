@@ -255,9 +255,6 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
   @Override
   public void writePartition(DataOutput out, int partitionId)
     throws IOException {
-    for (int id : map.keySet()) {
-      LOG.info("debug-partitioning: vertex messages container = " + map.get(id).getClass());
-    }
 
     Basic2ObjectMap<I, DataInputOutput> partitionMap = map.get(partitionId);
     partitionMap.write(out);

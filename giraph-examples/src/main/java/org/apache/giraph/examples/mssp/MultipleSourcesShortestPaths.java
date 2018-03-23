@@ -1,7 +1,6 @@
 package org.apache.giraph.examples.mssp;
 
 import org.apache.giraph.conf.IntConfOption;
-import org.apache.giraph.edge.Edge;
 import org.apache.giraph.examples.Algorithm;
 import org.apache.giraph.graph.BasicComputation;
 import org.apache.giraph.graph.Vertex;

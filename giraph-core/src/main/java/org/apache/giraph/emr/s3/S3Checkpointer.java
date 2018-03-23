@@ -24,6 +24,8 @@ public class S3Checkpointer extends S3Com{
 
     public static void upload(long superstep, GiraphConfiguration giraphConf) throws IOException {
 
+        if(superstep == 0) return; //TODO remove
+
         final String srcPattern = "'.*/" + superstep + "\\..*'";
 
         final String s3Command =  S3_DIST_CP_CMD_PREFIX + srcPattern;

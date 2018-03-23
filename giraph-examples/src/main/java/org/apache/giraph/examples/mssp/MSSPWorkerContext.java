@@ -5,6 +5,9 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.log4j.Logger;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.util.HashSet;
 
 public class MSSPWorkerContext extends WorkerContext {
@@ -65,10 +68,13 @@ public class MSSPWorkerContext extends WorkerContext {
 
     @Override
     public void preSuperstep() {
+
         int newEpoch =  this.<IntWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
 
         if(newEpoch != this.currentEpoch){
 
+            LOG.info("debug-mssp: new epoch " + newEpoch + " at superstep: " + getSuperstep());
+            
             this.currentEpoch = newEpoch;
 
             this.futureLandmarks = new HashSet<Long>();
@@ -82,5 +88,15 @@ public class MSSPWorkerContext extends WorkerContext {
     @Override
     public void postSuperstep() {
 
+    }
+
+    @Override
+    public void write(DataOutput dataOutput) throws IOException {
+        //TODO
+    }
+
+    @Override
+    public void readFields(DataInput dataInput) throws IOException {
+        //TODO
     }
 }

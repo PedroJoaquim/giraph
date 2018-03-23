@@ -663,7 +663,7 @@ public class BspServiceMaster<I extends WritableComparable,
     if (!getConfiguration().hasMappingInputFormat()) {
       return 0;
     }
-    LOG.info("debug-partitioning: run createMappingInputSplits");
+
     MappingInputFormat<I, V, E, ? extends Writable> mappingInputFormat =
             getConfiguration().createWrappedMappingInputFormat();
     return createInputSplits(mappingInputFormat, InputType.MAPPING);
@@ -676,7 +676,7 @@ public class BspServiceMaster<I extends WritableComparable,
       VertexInputFormat<I, V, E> vertexInputFormat =
               getConfiguration().createWrappedVertexInputFormat();
       splits = createInputSplits(vertexInputFormat, InputType.VERTEX);
-      LOG.info("debug-partitioning: run createVertexInputSplits splits = " + splits);
+
     }
     MasterProgress.get().setVertexInputSplitCount(splits);
     getJobProgressTracker().updateMasterProgress(MasterProgress.get());
@@ -691,7 +691,7 @@ public class BspServiceMaster<I extends WritableComparable,
       EdgeInputFormat<I, E> edgeInputFormat =
               getConfiguration().createWrappedEdgeInputFormat();
       splits = createInputSplits(edgeInputFormat, InputType.EDGE);
-      LOG.info("debug-partitioning: run createEdgeInputSplits splits = " + splits);
+
     }
     MasterProgress.get().setEdgeInputSplitsCount(splits);
     getJobProgressTracker().updateMasterProgress(MasterProgress.get());
@@ -737,7 +737,7 @@ public class BspServiceMaster<I extends WritableComparable,
     FileSystem fs = getFs();
     String finalizedCheckpointPath = getSavedCheckpointBasePath(superstep) +
             CheckpointingUtils.CHECKPOINT_FINALIZED_POSTFIX;
-    LOG.info("Loading checkpoint from " + finalizedCheckpointPath);
+
     DataInputStream finalizedStream =
             fs.open(new Path(finalizedCheckpointPath));
     GlobalStats globalStats = new GlobalStats();

@@ -189,11 +189,7 @@ public abstract class SimpleMessageStore<I extends WritableComparable,
   public void readFieldsForPartition(DataInput in,
       int partitionId) throws IOException {
 
-    LOG.info("debug-partitioning: readFieldsForPartition = im in read fields for partition T class = " + map.getClass());
-
     if (in.readBoolean()) {
-
-      LOG.info("debug-partitioning: readFieldsForPartition = its true");
 
       ConcurrentMap<I, T> partitionMap = Maps.newConcurrentMap();
       int numVertices = in.readInt();

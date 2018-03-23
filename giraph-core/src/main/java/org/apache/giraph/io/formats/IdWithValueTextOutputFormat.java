@@ -88,6 +88,7 @@ public class IdWithValueTextOutputFormat<I extends WritableComparable,
         str.append(delimiter);
         str.append(vertex.getValue().toString());
       }
+
       return new Text(str.toString());
     }
   }

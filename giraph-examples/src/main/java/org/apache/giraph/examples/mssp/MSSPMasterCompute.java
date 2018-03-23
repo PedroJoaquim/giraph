@@ -7,6 +7,7 @@ import org.apache.giraph.master.MasterCompute;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.log4j.Logger;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -16,12 +17,16 @@ public class MSSPMasterCompute extends MasterCompute {
 
     private int maxEpoch;
 
+    private static final Logger LOG =
+            Logger.getLogger(MSSPMasterCompute.class);
+
     @Override
     public void compute() {
 
         long aggregatedValue = this.<LongWritable>getAggregatedValue(MultipleSourcesShortestPaths.MESSAGES_SENT_AGG).get();
 
-        if(aggregatedValue == 0){
+        if(aggregatedValue == 0 && getSuperstep() > 0){
+
             int currentEpoch = this.<IntWritable>getAggregatedValue(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG).get();
 
             if(currentEpoch == maxEpoch){
@@ -61,11 +66,11 @@ public class MSSPMasterCompute extends MasterCompute {
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
-
+        //TODO
     }
 
     @Override
     public void readFields(DataInput dataInput) throws IOException {
-
+        //TODO
     }
 }

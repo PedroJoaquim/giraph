@@ -1848,7 +1848,7 @@ else[HADOOP_NON_SECURE]*/
 
             }
 
-            for (Integer partitionID: myPartitionIds) {//TODO: if problems arise try make this synchronized although seems not to be necessary
+            for (Integer partitionID: myPartitionIds) {
               myPartitions.get(partitionID).addPartition(threadLocalPartitions.get(partitionID));
             }
 

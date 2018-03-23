@@ -28,6 +28,7 @@ import org.apache.giraph.graph.Computation;
 import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
@@ -220,29 +221,35 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
 
         FileSystem fs = FileSystem.get(bspServiceMaster.getConfiguration());
 
-        int workerId = 0;
+        int numSamples = 0;
         double maxValue = 0;
 
-        while (true){
+        Path workingDirPath = new Path(".");
 
-          Path currentWorkerPath = CheckpointingUtils.getCheckpointRestartInfoFilePath(++workerId);
+        FileStatus[] allFiles = fs.listStatus(workingDirPath);
 
-          if(!fs.exists(currentWorkerPath)) break;
+        for (int i = 0; i < allFiles.length; i++) {
+          Path file = allFiles[i].getPath();
 
-          FSDataInputStream fileStream =
-                  fs.open(currentWorkerPath);
+          if(CheckpointingUtils.isRestartInfoFile(file)){
 
-          double currentValue = fileStream.readDouble();
+            numSamples++;
 
-          if(currentValue > maxValue){
-            maxValue = currentValue;
+            FSDataInputStream fileStream =
+                    fs.open(file);
+
+            double currentValue = fileStream.readDouble();
+
+            if(currentValue > maxValue){
+              maxValue = currentValue;
+            }
+
+            fileStream.close();
           }
-
-          fileStream.close();
 
         }
 
-        LOG.info("debug-checkpoint: sampled read checkpoint times from: " + (workerId - 1));
+        LOG.info("debug-checkpoint: read checkpoint times from: " + numSamples);
 
         result = maxValue;
 

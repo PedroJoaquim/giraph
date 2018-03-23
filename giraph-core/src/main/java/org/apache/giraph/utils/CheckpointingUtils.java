@@ -157,6 +157,10 @@ public class CheckpointingUtils {
     return new Path("checkpoint_" + workerID + RESTART_CHECKPOINT_TIME_POSTFIX);
   }
 
+  public static boolean isRestartInfoFile(Path file) {
+    return file.getName().endsWith(RESTART_CHECKPOINT_TIME_POSTFIX);
+  }
+
   /**
    * Only get the finalized checkpoint files
    */
