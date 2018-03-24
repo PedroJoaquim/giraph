@@ -323,6 +323,7 @@ public class BspServiceWorker<I extends WritableComparable,
               " threads(s)");
     }
 
+
     List<VertexEdgeCount> results =
             ProgressableUtils.getResultsWithNCallables(inputSplitsCallableFactory,
                     numThreads, "load-%d", getContext());
