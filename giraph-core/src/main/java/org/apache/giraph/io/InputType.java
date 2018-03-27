@@ -27,5 +27,7 @@ public enum InputType {
   /** Edge input */
   EDGE,
   /** Mapping input */
-  MAPPING
+  MAPPING,
+  /** Checkpoint input*/
+  CHECKPOINT
 }

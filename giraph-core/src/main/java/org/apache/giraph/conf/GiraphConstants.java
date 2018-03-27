@@ -84,6 +84,9 @@ import org.apache.giraph.partition.SimplePartition;
 import org.apache.giraph.worker.DefaultWorkerContext;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
+import org.apache.giraph.worker.checkpointing.CheckpointHandler;
+import org.apache.giraph.worker.checkpointing.DefaultCheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.OutputFormat;
@@ -212,6 +215,14 @@ public interface GiraphConstants {
   ClassConfOption<WorkerObserver> WORKER_OBSERVER_CLASSES =
           ClassConfOption.create("giraph.worker.observers", null,
                   WorkerObserver.class, "Classes for Worker Observer - optional");
+  /** Classes for Checkpoint Handler - optional */
+  ClassConfOption<CheckpointHandler> CHECKPOINT_HANDLER_CLASS =
+          ClassConfOption.create("giraph.worker.checkpointHandler", DefaultCheckpointHandler.class,
+                  CheckpointHandler.class, "Classes for Checkpoint Handler - optional");
+  /** Classes for Checkpoint Handler - optional */
+  ClassConfOption<VertexCheckpointHandler> VERTEX_CHECKPOINT_HANDLER_CLASS =
+          ClassConfOption.create("giraph.worker.vertexCheckpointHandler", null,
+                 VertexCheckpointHandler.class, "Class for VertexCheckpointHandler - optional");
   /** Classes for Mapper Observer - optional */
   ClassConfOption<MapperObserver> MAPPER_OBSERVER_CLASSES =
           ClassConfOption.create("giraph.mapper.observers", null,
