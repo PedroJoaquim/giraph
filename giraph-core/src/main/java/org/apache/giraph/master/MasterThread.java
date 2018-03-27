@@ -117,9 +117,11 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
             initializeMillis - startMillis);
         // Attempt to create InputSplits if xnecessary. Bail out if that fails.
 
-        if (bspServiceMaster.getRestartedSuperstep() !=
-            BspService.UNSET_SUPERSTEP ||
-            (bspServiceMaster.createMappingInputSplits() != -1 &&
+        int checkpointInputSplits = bspServiceMaster.createCheckpointInputSplits();
+
+        if (checkpointInputSplits > 0 ||
+            (checkpointInputSplits != -1 &&
+                    bspServiceMaster.createMappingInputSplits() != -1 &&
                 bspServiceMaster.createVertexInputSplits() != -1 &&
                 bspServiceMaster.createEdgeInputSplits() != -1)) {
 

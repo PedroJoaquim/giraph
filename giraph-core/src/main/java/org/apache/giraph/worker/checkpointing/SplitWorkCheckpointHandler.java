@@ -62,11 +62,13 @@ public abstract class SplitWorkCheckpointHandler
                                 break;
                             }
                             Path verticesPath =
-                                    createCheckpointFilePathSafe( partition.getId() +
+                                    new Path(getBspService().getCheckpointBasePath(getBspService().getSuperstep())
+                                            + "/vertices/" + partition.getId() +
                                             CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
 
                             Path msgsPath =
-                                    createCheckpointFilePathSafe( partition.getId() +
+                                    new Path(getBspService().getCheckpointBasePath(getBspService().getSuperstep())
+                                            + "/messsages/" + partition.getId() +
                                             CheckpointingUtils.CHECKPOINT_MESSAGES_POSTFIX);
 
                             FSDataOutputStream uncompressedVerticesStream =
@@ -117,5 +119,7 @@ public abstract class SplitWorkCheckpointHandler
     protected abstract void writePartitionToStream(DataOutputStream verticesStream, Partition<I, V, E> partition) throws IOException;
 
     protected abstract void writeMessages(DataOutputStream msgsStream, MessageStore<I, Writable> currentMessageStore, int id) throws IOException;
+
+
 
 }

@@ -1,6 +1,7 @@
 package org.apache.giraph.io.checkpoint;
 
 import org.apache.giraph.io.GiraphInputFormat;
+import org.apache.giraph.io.formats.GiraphTextInputFormat;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
@@ -13,6 +14,13 @@ import java.util.List;
 public class CheckpointInputFormat <I extends WritableComparable,
         E extends Writable> extends GiraphInputFormat<I, Writable, E> {
 
+    private long restartSuperstep;
+
+    protected GiraphTextInputFormat textInputFormat = new GiraphTextInputFormat();
+
+    public CheckpointInputFormat(long restartSuperstep) {
+        this.restartSuperstep = restartSuperstep;
+    }
 
     @Override
     public void checkInputSpecs(Configuration conf) {
@@ -21,6 +29,6 @@ public class CheckpointInputFormat <I extends WritableComparable,
 
     @Override
     public List<InputSplit> getSplits(JobContext context, int minSplitCountHint) throws IOException, InterruptedException {
-        return null; //todo called by the master
+        return textInputFormat.getCheckpointSplits(context, restartSuperstep);
     }
 }

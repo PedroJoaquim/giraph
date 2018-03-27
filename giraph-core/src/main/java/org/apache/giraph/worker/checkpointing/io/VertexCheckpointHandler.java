@@ -1,21 +1,47 @@
 package org.apache.giraph.worker.checkpointing.io;
 
 import org.apache.giraph.edge.Edge;
+import org.apache.giraph.graph.Vertex;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 
-public interface VertexCheckpointHandler<I extends WritableComparable, V, E extends Writable> {
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.regex.Pattern;
 
-    String writeVertexID(I vertexID);
+public abstract class VertexCheckpointHandler<I extends WritableComparable,
+        V extends Writable,
+        E extends Writable> {
 
-    String writeVertexValue(V vertexValue);
+    private static final String SEPARATOR = "\t";
 
-    String writeVertexEdge(Edge<I, E> edge);
+    private static final String EOL = "\n";
 
-    I readVertexID(String vertexID);
+    private final Pattern SEPARATOR_PATTERN = Pattern.compile("[\t ]");
 
-    V readVertexValue(String vertexID);
+    public void writeVertex(Vertex<I, V, E> vertex, DataOutputStream verticesStream) throws IOException {
 
-    Edge<I, E> readEdge(String edge);
+        verticesStream.writeUTF(writeVertexID(vertex.getId()));
+        verticesStream.writeUTF(SEPARATOR);
+        verticesStream.writeUTF(writeVertexValue(vertex.getValue()));
+
+        for (Edge<I, E> edge : vertex.getEdges()) {
+            verticesStream.writeUTF(SEPARATOR);
+            verticesStream.writeUTF(writeVertexEdge(edge));
+        }
+
+        verticesStream.writeUTF(EOL);
+    }
+
+    public Vertex<I, V, E> readVertex(String line) {
+        return null;
+    }
+
+    protected abstract String writeVertexEdge(Edge<I, E> edge);
+
+    protected abstract String writeVertexValue(V value);
+
+    protected abstract String writeVertexID(I id);
+
 
 }

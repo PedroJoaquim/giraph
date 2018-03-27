@@ -49,6 +49,7 @@ import org.apache.giraph.io.GiraphInputFormat;
 import org.apache.giraph.io.InputType;
 import org.apache.giraph.io.MappingInputFormat;
 import org.apache.giraph.io.VertexInputFormat;
+import org.apache.giraph.io.checkpoint.CheckpointInputFormat;
 import org.apache.giraph.master.input.MasterInputSplitsHandler;
 import org.apache.giraph.metrics.AggregatedMetrics;
 import org.apache.giraph.metrics.GiraphMetrics;
@@ -572,6 +573,8 @@ public class BspServiceMaster<I extends WritableComparable,
     return healthyWorkerInfoList;
   }
 
+
+
   /**
    * Log info level of the missing workers on the superstep
    *
@@ -682,6 +685,23 @@ public class BspServiceMaster<I extends WritableComparable,
     getJobProgressTracker().updateMasterProgress(MasterProgress.get());
     return splits;
   }
+
+  @Override
+  public int createCheckpointInputSplits() {
+    int splits = 0;
+
+    LOG.info("debug-restart: createCheckpointInputSplits restartSuperstep = " + getRestartedSuperstep());
+
+    if(getRestartedSuperstep() != BspService.UNSET_SUPERSTEP){
+      CheckpointInputFormat<I, E> checkpointInputFormat =
+              new CheckpointInputFormat<I, E>();
+      splits = createInputSplits(checkpointInputFormat, InputType.CHECKPOINT);
+
+    }
+    getJobProgressTracker().updateMasterProgress(MasterProgress.get());
+    return splits;
+  }
+
 
   @Override
   public int createEdgeInputSplits() {

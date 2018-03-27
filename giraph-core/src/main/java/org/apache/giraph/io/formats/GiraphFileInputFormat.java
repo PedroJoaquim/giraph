@@ -18,6 +18,7 @@
 
 package org.apache.giraph.io.formats;
 
+import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
@@ -36,6 +37,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+
+import static org.apache.giraph.conf.GiraphConstants.RESTART_JOB_ID;
 
 /*if[HADOOP_NON_SECURE]
 else[HADOOP_NON_SECURE]
@@ -159,6 +162,19 @@ public abstract class GiraphFileInputFormat<K, V>
   }
 
   /**
+   * Get the checkpoint folder {@link Path}s.
+   *
+   * @param context The job
+   * @return The checkpoint folder {@link Path}s
+   */
+  public static Path[] getCheckpointInputPaths(JobContext context, long restartSuperstep) {
+    String restartJobId = RESTART_JOB_ID.get(context.getConfiguration());
+    String dirs = CheckpointingUtils.getCheckpointBasePath(context.getConfiguration(), restartJobId) + "/" + restartSuperstep + "/vertices/" ;
+
+    return new Path[]{new Path(StringUtils.unEscapeString(dirs))};
+  }
+
+  /**
    * Get the list of edge input {@link Path}s.
    *
    * @param context The job
@@ -220,10 +236,6 @@ public abstract class GiraphFileInputFormat<K, V>
     throws IOException {
     List<FileStatus> result = new ArrayList<FileStatus>();
 
-    for (Path p : dirs) {
-      LOG.info("debug: INPUT PATH: " + p.toString());
-    }
-
     if (dirs.length == 0) {
       throw new IOException("No input paths specified in job");
     }
@@ -284,6 +296,19 @@ end[HADOOP_NON_SECURE]*/
     throws IOException {
     return listStatus(job, getVertexInputPaths(job));
   }
+
+  /**
+   * List checkpoint input directories.
+   *
+   * @param job the job to list vertex input paths for
+   * @return array of FileStatus objects
+   * @throws IOException if zero items.
+   */
+  protected List<FileStatus> listCheckpointStatus(JobContext job, long restartSuperstep)
+          throws IOException {
+    return listStatus(job, getCheckpointInputPaths(job, restartSuperstep));
+  }
+
 
   /**
    * List edge input directories.
@@ -374,6 +399,21 @@ end[HADOOP_NON_SECURE]*/
     // Save the number of input files in the job-conf
     job.getConfiguration().setLong(NUM_EDGE_INPUT_FILES, files.size());
     LOG.debug("Total # of edge splits: " + splits.size());
+    return splits;
+  }
+
+  /**
+   * Generate the list of checkpoint input splits.
+   *
+   * @param job The job
+   * @return The list of checkpoint input splits
+   * @throws IOException
+   */
+  public List<InputSplit> getCheckpointSplits(JobContext job, long restartSuperstep) throws IOException {
+    List<FileStatus> files = listCheckpointStatus(job, restartSuperstep);
+    List<InputSplit> splits = getSplits(job, files);
+    // Save the number of input files in the job-conf
+    LOG.debug("Total # of checkpoint splits: " + splits.size());
     return splits;
   }
 }
