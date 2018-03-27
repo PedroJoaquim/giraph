@@ -54,6 +54,8 @@ import org.apache.giraph.partition.ReusesObjectsPartition;
 import org.apache.giraph.utils.ReflectionUtils;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
+import org.apache.giraph.worker.checkpointing.CheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.net.DNS;
@@ -695,6 +697,24 @@ public class GiraphConfiguration extends Configuration
    */
   public Class<? extends WorkerObserver>[] getWorkerObserverClasses() {
     return WORKER_OBSERVER_CLASSES.getArray(this);
+  }
+
+  /**
+   * Get CheckpointHandler class set in configuration.
+   *
+   * @return CheckpointHandler class
+   */
+  public Class<? extends CheckpointHandler> getCheckpointHandlerClass() {
+    return CHECKPOINT_HANDLER_CLASS.get(this);
+  }
+
+  /**
+   * Get VertexCheckpointHandler class set in configuration.
+   *
+   * @return VertexCheckpointHandler class
+   */
+  public Class<? extends VertexCheckpointHandler> getVertexCheckpointHandlerClass() {
+    return VERTEX_CHECKPOINT_HANDLER_CLASS.get(this);
   }
 
   /**

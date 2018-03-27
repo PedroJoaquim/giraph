@@ -84,6 +84,8 @@ import org.apache.giraph.utils.io.DataInputOutput;
 import org.apache.giraph.utils.io.ExtendedDataInputOutput;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
+import org.apache.giraph.worker.checkpointing.CheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -761,6 +763,32 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
       objects[i] = ReflectionUtils.newInstance(klasses[i], this, context);
     }
     return objects;
+  }
+
+  /**
+   * Create checkpoint handler
+   *
+   * @param context Mapper context
+   * @return Instantiated class of CheckpointHandler.
+   */
+  public CheckpointHandler createCheckpointHandler(
+          Mapper<?, ?, ?, ?>.Context context) {
+
+    Class<? extends CheckpointHandler> checkpointHandlerClass = getCheckpointHandlerClass();
+    return ReflectionUtils.newInstance(checkpointHandlerClass, this, context);
+  }
+
+  /**
+   * Create a vertex checkpoint handler
+   *
+   * @return Instantiated user aggregator writer class
+   */
+  public VertexCheckpointHandler<I, V, E> createVertexCheckpointHandler(
+          Mapper<?, ?, ?, ?>.Context context) {
+
+    Class<? extends VertexCheckpointHandler> vertexCheckpointHandlerClass = getVertexCheckpointHandlerClass();
+
+    return ReflectionUtils.newInstance(vertexCheckpointHandlerClass, this, context);
   }
 
   /**

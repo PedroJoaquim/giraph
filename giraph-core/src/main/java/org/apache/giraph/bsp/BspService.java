@@ -936,7 +936,7 @@ public abstract class BspService<I extends WritableComparable,
    * @param workerInfo worker info object
    * @return worker number
    */
-  protected int getWorkerId(WorkerInfo workerInfo) {
+  public int getWorkerId(WorkerInfo workerInfo) {
     return getWorkerInfoList().indexOf(workerInfo);
   }
 
