@@ -22,6 +22,8 @@ import org.apache.giraph.aggregators.TextAggregatorWriter;
 import org.apache.giraph.bsp.BspOutputFormat;
 import org.apache.giraph.bsp.checkpoints.CheckpointSupportedChecker;
 import org.apache.giraph.bsp.checkpoints.DefaultCheckpointSupportedChecker;
+import org.apache.giraph.checkpointing.CheckpointHandler;
+import org.apache.giraph.checkpointing.DefaultCheckpointHandler;
 import org.apache.giraph.combiner.MessageCombiner;
 import org.apache.giraph.comm.messages.InMemoryMessageStoreFactory;
 import org.apache.giraph.comm.messages.MessageEncodeAndStoreType;
@@ -84,9 +86,9 @@ import org.apache.giraph.partition.SimplePartition;
 import org.apache.giraph.worker.DefaultWorkerContext;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
-import org.apache.giraph.worker.checkpointing.CheckpointHandler;
-import org.apache.giraph.worker.checkpointing.DefaultCheckpointHandler;
-import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
+import org.apache.giraph.checkpointing.WorkerCheckpointHandler;
+import org.apache.giraph.worker.checkpointing.DefaultWorkerCheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointWriter;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.OutputFormat;
@@ -217,12 +219,12 @@ public interface GiraphConstants {
                   WorkerObserver.class, "Classes for Worker Observer - optional");
   /** Classes for Checkpoint Handler - optional */
   ClassConfOption<CheckpointHandler> CHECKPOINT_HANDLER_CLASS =
-          ClassConfOption.create("giraph.worker.checkpointHandler", DefaultCheckpointHandler.class,
+          ClassConfOption.create("giraph.checkpointHandler", DefaultCheckpointHandler.class,
                   CheckpointHandler.class, "Classes for Checkpoint Handler - optional");
   /** Classes for Checkpoint Handler - optional */
-  ClassConfOption<VertexCheckpointHandler> VERTEX_CHECKPOINT_HANDLER_CLASS =
-          ClassConfOption.create("giraph.worker.vertexCheckpointHandler", null,
-                 VertexCheckpointHandler.class, "Class for VertexCheckpointHandler - optional");
+  ClassConfOption<VertexCheckpointWriter> VERTEX_CHECKPOINT_WRITER_CLASS =
+          ClassConfOption.create("giraph.worker.vertexCheckpointWriter", null,
+                 VertexCheckpointWriter.class, "Class for VertexCheckpointWriter - optional");
   /** Classes for Mapper Observer - optional */
   ClassConfOption<MapperObserver> MAPPER_OBSERVER_CLASSES =
           ClassConfOption.create("giraph.mapper.observers", null,

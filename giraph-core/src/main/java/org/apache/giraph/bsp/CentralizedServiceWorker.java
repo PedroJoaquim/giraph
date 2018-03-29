@@ -218,6 +218,10 @@ public interface CentralizedServiceWorker<I extends WritableComparable,
    */
   void prepareSuperstep();
 
+
+  //TODO - MUST BE REPLACED
+  void markCurrentWorkerDoneReadingThenWaitForOthers();
+
   /**
    * Get the superstep output class
    *

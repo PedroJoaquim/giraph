@@ -237,6 +237,7 @@ public class ServerData<I extends WritableComparable,
    * Discards old values if any.
    */
   public void resetMessageStores() {
+
     if (currentMessageStore != null) {
       currentMessageStore.clearAll();
       currentMessageStore = null;
@@ -261,6 +262,7 @@ public class ServerData<I extends WritableComparable,
     // First create the necessary in-memory message stores. If out-of-core
     // mechanism is enabled, we wrap the in-memory message stores within
     // disk-backed messages stores.
+
     if (incomingMessageStore != null) {
       nextCurrentMessageStore = incomingMessageStore;
     } else {

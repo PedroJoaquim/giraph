@@ -73,6 +73,7 @@ public class SendWorkerMessagesRequest<I extends WritableComparable,
         iterator = partitionVertexData.getIterator();
     while (iterator.hasNext()) {
       iterator.next();
+
       serverData.getIncomingMessageStore().
           addPartitionMessages(iterator.getCurrentFirst(),
               iterator.getCurrentSecond());

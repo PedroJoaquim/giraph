@@ -101,57 +101,6 @@ public class CheckpointingUtils {
     return new Path(getCheckpointBasePath(conf, jobId), "halt");
   }
 
-  /**
-   * Get the last saved superstep.
-   *
-   * @param fs file system where checkpoint is stored.
-   * @param checkpointBasePath path to checkpoints folder
-   * @return Last good superstep number
-   * @throws java.io.IOException
-   */
-  public static long getLastCheckpointedSuperstep(
-      FileSystem fs, String checkpointBasePath) throws IOException {
-    Path cpPath = new Path(checkpointBasePath);
-    if (fs.exists(cpPath)) {
-      FileStatus[] fileStatusArray =
-          fs.listStatus(cpPath, new FinalizedCheckpointPathFilter());
-      if (fileStatusArray != null) {
-        long lastCheckpointedSuperstep = Long.MIN_VALUE;
-        for (FileStatus file : fileStatusArray) {
-          long superstep = getCheckpoint(file);
-          if (superstep > lastCheckpointedSuperstep) {
-            lastCheckpointedSuperstep = superstep;
-          }
-        }
-        if (LOG.isInfoEnabled()) {
-          LOG.info("getLastGoodCheckpoint: Found last good checkpoint " +
-              lastCheckpointedSuperstep);
-        }
-        return lastCheckpointedSuperstep;
-      }
-    }
-    return -1;
-  }
-
-  /**
-   * Get the checkpoint from a finalized checkpoint path
-   *
-   * @param finalizedPath Path of the finalized checkpoint
-   * @return Superstep referring to a checkpoint of the finalized path
-   */
-  private static long getCheckpoint(FileStatus finalizedPath) {
-    if (!finalizedPath.getPath().getName().
-        endsWith(CHECKPOINT_FINALIZED_POSTFIX)) {
-      throw new InvalidParameterException(
-          "getCheckpoint: " + finalizedPath + "Doesn't end in " +
-              CHECKPOINT_FINALIZED_POSTFIX);
-    }
-    String checkpointString =
-        finalizedPath.getPath().getName().
-            replace(CHECKPOINT_FINALIZED_POSTFIX, "");
-    return Long.parseLong(checkpointString);
-  }
-
 
   public static Path getCheckpointRestartInfoFilePath(int workerID){
     return new Path("checkpoint_" + workerID + RESTART_CHECKPOINT_TIME_POSTFIX);
@@ -159,16 +108,5 @@ public class CheckpointingUtils {
 
   public static boolean isRestartInfoFile(Path file) {
     return file.getName().endsWith(RESTART_CHECKPOINT_TIME_POSTFIX);
-  }
-
-  /**
-   * Only get the finalized checkpoint files
-   */
-  private static class FinalizedCheckpointPathFilter implements PathFilter {
-    @Override
-    public boolean accept(Path path) {
-      return path.getName().endsWith(CHECKPOINT_FINALIZED_POSTFIX);
-    }
-
   }
 }

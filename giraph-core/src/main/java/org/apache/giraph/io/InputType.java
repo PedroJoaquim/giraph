@@ -28,6 +28,8 @@ public enum InputType {
   EDGE,
   /** Mapping input */
   MAPPING,
-  /** Checkpoint input*/
-  CHECKPOINT
+  /** Checkpoint vertices input*/
+  CHECKPOINT_VERTICES,
+  /** Checkpoint messages input*/
+  CHECKPOINT_MESSAGES,
 }

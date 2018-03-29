@@ -148,7 +148,9 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
   @Override
   public void addPartitionMessages(int partitionId,
       VertexIdMessages<I, M> messages) {
-    Basic2ObjectMap<I, DataInputOutput> partitionMap = map.get(partitionId);
+
+    Basic2ObjectMap<I, DataInputOutput> partitionMap = getOrCreatePartitionMap(partitionId);
+
     synchronized (partitionMap) {
       VertexIdMessageBytesIterator<I, M> vertexIdMessageBytesIterator =
           messages.getVertexIdMessageBytesIterator();
@@ -183,6 +185,25 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
         }
       }
     }
+  }
+
+  private synchronized Basic2ObjectMap<I, DataInputOutput> getOrCreatePartitionMap(int partitionId) {
+    Basic2ObjectMap<I, DataInputOutput> partitionMap = map.get(partitionId);
+
+    if(partitionMap == null){
+
+      int capacity = Math.max(10,
+              (int) partitionInfo.getPartitionVertexCount(partitionId));
+
+      partitionMap =
+              idTypeOps.create2ObjectOpenHashMap(
+                      capacity,
+                      dataInputOutputWriter);
+
+      map.put(partitionId, partitionMap);
+    }
+
+    return partitionMap;
   }
 
   /**

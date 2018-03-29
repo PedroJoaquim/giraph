@@ -11,15 +11,15 @@ import org.apache.hadoop.mapreduce.JobContext;
 import java.io.IOException;
 import java.util.List;
 
-public class CheckpointInputFormat <I extends WritableComparable,
+public class CheckpointInputFormat<I extends WritableComparable,
         E extends Writable> extends GiraphInputFormat<I, Writable, E> {
 
-    private long restartSuperstep;
+    private String checkpointDir;
 
     protected GiraphTextInputFormat textInputFormat = new GiraphTextInputFormat();
 
-    public CheckpointInputFormat(long restartSuperstep) {
-        this.restartSuperstep = restartSuperstep;
+    public CheckpointInputFormat(String checkpointDir) {
+        this.checkpointDir = checkpointDir;
     }
 
     @Override
@@ -29,6 +29,6 @@ public class CheckpointInputFormat <I extends WritableComparable,
 
     @Override
     public List<InputSplit> getSplits(JobContext context, int minSplitCountHint) throws IOException, InterruptedException {
-        return textInputFormat.getCheckpointSplits(context, restartSuperstep);
+        return textInputFormat.getCheckpointSplits(context, checkpointDir);
     }
 }

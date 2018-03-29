@@ -18,6 +18,8 @@
 
 package org.apache.giraph.master.input;
 
+import org.apache.log4j.Logger;
+
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -29,6 +31,9 @@ public class BasicInputSplitsMasterOrganizer
     implements InputSplitsMasterOrganizer {
   /** Available splits queue */
   private final ConcurrentLinkedQueue<byte[]> splits;
+
+  /** Class logger */
+  private static final Logger LOG = Logger.getLogger(BasicInputSplitsMasterOrganizer.class);
 
   /**
    * Constructor

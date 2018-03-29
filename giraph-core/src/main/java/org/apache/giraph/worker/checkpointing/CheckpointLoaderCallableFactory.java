@@ -2,10 +2,12 @@ package org.apache.giraph.worker.checkpointing;
 
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.graph.VertexEdgeCount;
+import org.apache.giraph.io.InputType;
+import org.apache.giraph.io.checkpoint.CheckpointInputFormat;
 import org.apache.giraph.utils.CallableFactory;
 import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.giraph.worker.WorkerInputSplitsHandler;
-import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointWriter;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -13,7 +15,9 @@ import org.apache.hadoop.mapreduce.Mapper;
 import java.util.concurrent.Callable;
 
 public class CheckpointLoaderCallableFactory<I extends WritableComparable,
-        V extends Writable, E extends Writable>
+        V extends Writable,
+        E extends Writable,
+        M extends Writable>
         implements CallableFactory<VertexEdgeCount> {
 
 
@@ -28,30 +32,41 @@ public class CheckpointLoaderCallableFactory<I extends WritableComparable,
     /** superstep we are restarting from*/
     private long superstep;
     /**Vertex checkpoint writer*/
-    private VertexCheckpointHandler<I, V, E> vertexCheckpointWriter;
+    private VertexCheckpointWriter<I, V, E, M> vertexCheckpointWriter;
+    /**Checkpoint input format*/
+    private final CheckpointInputFormat<I, E> checkpointInputFormat;
+    /** load input type*/
+    private InputType inputType;
 
     public CheckpointLoaderCallableFactory(long superstep,
                                            Mapper<?, ?, ?, ?>.Context context,
                                            ImmutableClassesGiraphConfiguration<I, V, E> configuration,
                                            BspServiceWorker<I, V, E> bspServiceWorker,
                                            WorkerInputSplitsHandler splitsHandler,
-                                           VertexCheckpointHandler<I, V, E> vertexCheckpointWriter) {
+                                           VertexCheckpointWriter<I, V, E, M> vertexCheckpointWriter,
+                                           CheckpointInputFormat<I, E> checkpointInputFormat,
+                                           InputType inputType) {
         this.superstep = superstep;
         this.context = context;
         this.configuration = configuration;
         this.bspServiceWorker = bspServiceWorker;
         this.splitsHandler = splitsHandler;
         this.vertexCheckpointWriter = vertexCheckpointWriter;
+        this.checkpointInputFormat = checkpointInputFormat;
+        this.inputType = inputType;
+
     }
 
     @Override
     public Callable<VertexEdgeCount> newCallable(int callableId) {
-        return new CheckpointLoaderCallable<I, V, E>(
+        return new CheckpointLoaderCallable<I, V, E, M>(
                 superstep,
                 context,
                 configuration,
                 bspServiceWorker,
                 splitsHandler,
-                this.vertexCheckpointWriter);
+                vertexCheckpointWriter,
+                checkpointInputFormat,
+                inputType);
     }
 }

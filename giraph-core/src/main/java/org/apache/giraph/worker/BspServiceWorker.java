@@ -18,14 +18,11 @@
 
 package org.apache.giraph.worker;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
 import net.iharder.Base64;
@@ -40,7 +37,6 @@ import org.apache.giraph.comm.WorkerClientRequestProcessor;
 import org.apache.giraph.comm.WorkerServer;
 import org.apache.giraph.comm.aggregators.WorkerAggregatorRequestProcessor;
 import org.apache.giraph.comm.messages.MessageStore;
-import org.apache.giraph.comm.messages.primitives.IdByteArrayMessageStore;
 import org.apache.giraph.comm.messages.queue.AsyncMessageStoreWrapper;
 import org.apache.giraph.comm.netty.NettyWorkerAggregatorRequestProcessor;
 import org.apache.giraph.comm.netty.NettyWorkerClient;
@@ -77,28 +73,19 @@ import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.partition.PartitionStats;
 import org.apache.giraph.partition.PartitionStore;
 import org.apache.giraph.partition.WorkerGraphPartitioner;
-import org.apache.giraph.types.ops.collections.Basic2ObjectMap;
-import org.apache.giraph.types.ops.collections.WritableWriter;
 import org.apache.giraph.utils.BlockingElementsSet;
 import org.apache.giraph.utils.CallableFactory;
-import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.giraph.utils.JMapHistoDumper;
 import org.apache.giraph.utils.LoggerUtils;
 import org.apache.giraph.utils.MemoryUtils;
 import org.apache.giraph.utils.ProgressableUtils;
 import org.apache.giraph.utils.ReactiveJMapHistoDumper;
 import org.apache.giraph.utils.WritableUtils;
-import org.apache.giraph.utils.io.DataInputOutput;
-import org.apache.giraph.worker.checkpointing.CheckpointHandler;
+import org.apache.giraph.checkpointing.WorkerCheckpointHandler;
 import org.apache.giraph.zk.BspEvent;
 import org.apache.giraph.zk.PredicateLock;
-import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
-import org.apache.hadoop.io.compress.CompressionCodec;
-import org.apache.hadoop.io.compress.CompressionCodecFactory;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.OutputCommitter;
 import org.apache.log4j.Level;
@@ -188,7 +175,7 @@ public class BspServiceWorker<I extends WritableComparable,
   private final MemoryObserver memoryObserver;
 
   /** Checkpoint Handler*/
-  private CheckpointHandler checkpointHandler;
+  private WorkerCheckpointHandler workerCheckpointHandler;
 
   /**
    * Constructor for setting up the worker.
@@ -245,9 +232,6 @@ public class BspServiceWorker<I extends WritableComparable,
     }
     observers = conf.createWorkerObservers(context);
 
-    checkpointHandler = conf.createCheckpointHandler(context);
-    checkpointHandler.initialize(this, this);
-
     WorkerProgress.get().setTaskId(getTaskId());
     workerProgressWriter = conf.trackJobProgressOnClient() ?
             new WorkerProgressWriter(graphTaskManager.getJobProgressTracker()) :
@@ -259,6 +243,9 @@ public class BspServiceWorker<I extends WritableComparable,
             workerInfo, masterInfo.getTaskId(), workerClient);
 
     memoryObserver = new MemoryObserver(getZkExt(), memoryObserverPath, conf);
+
+    workerCheckpointHandler = getCheckpointHandler().
+            createWorkerCheckpointHandler(this, this, getCheckpointPathManager());
   }
 
   @Override
@@ -419,7 +406,7 @@ public class BspServiceWorker<I extends WritableComparable,
    * Mark current worker as done and then wait for all workers
    * to finish processing input splits.
    */
-  private void markCurrentWorkerDoneReadingThenWaitForOthers() {
+  public void markCurrentWorkerDoneReadingThenWaitForOthers() {
     String workerInputSplitsDonePath =
             inputSplitsWorkerDonePath + "/" + getWorkerInfo().getHostnameId();
     try {
@@ -1259,7 +1246,7 @@ else[HADOOP_NON_SECURE]*/
 
     long start = System.currentTimeMillis();
 
-    this.checkpointHandler.storeCheckpoint();
+    this.workerCheckpointHandler.storeCheckpoint();
 
     long end = System.currentTimeMillis();
 
@@ -1269,7 +1256,7 @@ else[HADOOP_NON_SECURE]*/
 
   @Override
   public VertexEdgeCount loadCheckpoint(long superstep) {
-    return this.checkpointHandler.loadCheckpoint(superstep);
+    return this.workerCheckpointHandler.loadCheckpoint(superstep);
   }
 
 

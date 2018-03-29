@@ -18,6 +18,8 @@
 
 package org.apache.giraph.bsp;
 
+import org.apache.giraph.checkpointing.CheckpointHandler;
+import org.apache.giraph.checkpointing.CheckpointPathManager;
 import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.graph.GraphTaskManager;
@@ -200,6 +202,10 @@ public abstract class BspService<I extends WritableComparable,
   private final GraphTaskManager<I, V, E> graphTaskManager;
   /** File system */
   private final FileSystem fs;
+  /** Checkpoint Handler */
+  private final CheckpointHandler<I, V, E> checkpointHandler;
+  /** Checkpoint Path Manager */
+  private final CheckpointPathManager checkpointPathManager;
 
   /**
    * Constructor.
@@ -235,6 +241,7 @@ public abstract class BspService<I extends WritableComparable,
     this.jobId = conf.getJobId();
     this.restartedSuperstep = conf.getLong(
         GiraphConstants.RESTART_SUPERSTEP, UNSET_SUPERSTEP);
+
     try {
       this.hostname = conf.getLocalHostname();
     } catch (UnknownHostException e) {
@@ -261,6 +268,9 @@ public abstract class BspService<I extends WritableComparable,
 
     checkpointBasePath = CheckpointingUtils.
         getCheckpointBasePath(getConfiguration(), getJobId());
+
+    this.checkpointHandler = conf.createCheckpointHandler();
+    this.checkpointPathManager = this.checkpointHandler.createPathManager(savedCheckpointBasePath, checkpointBasePath);
 
     masterElectionPath = basePath + MASTER_ELECTION_DIR;
     String serverPortList = graphTaskManager.getZookeeperList();
@@ -467,21 +477,19 @@ public abstract class BspService<I extends WritableComparable,
    * Generate the base superstep directory path for a given application
    * attempt
    *
-   * @param superstep Superstep to use
    * @return Directory path based on the a superstep
    */
-  public final String getCheckpointBasePath(long superstep) {
-    return checkpointBasePath + "/" + superstep;
+  public final String getCheckpointBasePath() {
+    return checkpointBasePath;
   }
 
   /**
    * In case when we restart another job this will give us a path
    * to saved checkpoint.
-   * @param superstep superstep to use
-   * @return Direcory path for restarted job based on the superstep
+   * @return Direcory path for restarted job
    */
-  public final String getSavedCheckpointBasePath(long superstep) {
-    return savedCheckpointBasePath + "/" + superstep;
+  public final String getSavedCheckpointBasePath() {
+    return savedCheckpointBasePath;
   }
 
 
@@ -800,7 +808,7 @@ public abstract class BspService<I extends WritableComparable,
    *
    * @return Instantiated graph partitioner factory
    */
-  protected GraphPartitionerFactory<I, V, E> getGraphPartitionerFactory() {
+  public GraphPartitionerFactory<I, V, E> getGraphPartitionerFactory() {
     return graphPartitionerFactory;
   }
 
@@ -917,8 +925,7 @@ public abstract class BspService<I extends WritableComparable,
    * @throws IOException
    */
   protected long getLastCheckpointedSuperstep() throws IOException {
-    return CheckpointingUtils.getLastCheckpointedSuperstep(getFs(),
-        savedCheckpointBasePath);
+    return this.checkpointPathManager.getLastCheckpointedSuperstep(getFs());
   }
 
   @Override
@@ -947,5 +954,21 @@ public abstract class BspService<I extends WritableComparable,
    */
   protected WorkerInfo getWorkerInfoById(int id) {
     return getWorkerInfoList().get(id);
+  }
+
+  /**
+   * Returns the checkpoint handler
+   * @return CheckpointHandler
+   */
+  protected CheckpointHandler<I, V, E> getCheckpointHandler(){
+    return this.checkpointHandler;
+  }
+
+  /**
+   * Returns the checkpoint path manager
+   * @return CheckpointPathManager
+   */
+  protected CheckpointPathManager getCheckpointPathManager(){
+    return this.checkpointPathManager;
   }
 }

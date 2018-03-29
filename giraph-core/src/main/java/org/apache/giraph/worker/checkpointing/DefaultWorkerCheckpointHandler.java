@@ -1,5 +1,6 @@
 package org.apache.giraph.worker.checkpointing;
 
+import org.apache.giraph.checkpointing.WorkerCheckpointHandler;
 import org.apache.giraph.comm.messages.primitives.IdByteArrayMessageStore;
 import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.graph.GlobalStats;
@@ -33,12 +34,13 @@ import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class DefaultCheckpointHandler<I extends WritableComparable,
-        V extends WritableComparable,
-        E extends WritableComparable> extends CheckpointHandler<I, V, E> {
+public class DefaultWorkerCheckpointHandler
+        <I extends WritableComparable,
+        V extends Writable,
+        E extends Writable> extends WorkerCheckpointHandler<I, V, E> {
 
     /** Class logger */
-    private static final Logger LOG = Logger.getLogger(DefaultCheckpointHandler.class);
+    private static final Logger LOG = Logger.getLogger(DefaultWorkerCheckpointHandler.class);
 
     private boolean resetPartitioning;
 
@@ -72,41 +74,12 @@ public class DefaultCheckpointHandler<I extends WritableComparable,
             previousPartitionsIds.add(i);
         }
 
-        String finalizedCheckpointPath = getBspService().getSavedCheckpointBasePath(superstep) +
-                CheckpointingUtils.CHECKPOINT_FINALIZED_POSTFIX;
-
-         this.resetPartitioning = newNumberOfPartitions != previousNumberOfPartitions;
+        this.resetPartitioning = newNumberOfPartitions != previousNumberOfPartitions;
 
         LOG.info("debug-checkpoint: Loading checkpoint as " + (resetPartitioning ? "RESET" : "MICRO"));
 
         try {
-
-            loadVerticesFromHDFS(superstep);
-
-            getContext().progress();
-
-            // Load global stats and superstep classes
-            GlobalStats globalStats = new GlobalStats();
-            SuperstepClasses superstepClasses = SuperstepClasses.createToRead(
-                    getConfig());
-
-            DataInputStream finalizedStream =
-                    getBspService().getFs().open(new Path(finalizedCheckpointPath));
-            globalStats.readFields(finalizedStream);
-            superstepClasses.readFields(finalizedStream);
-            getConfig().updateSuperstepClasses(superstepClasses);
-            getCentralizedServiceWorker().getServerData().resetMessageStores();
-
-            loadMessagesFromHDFS(superstep);
-
-            // Communication service needs to setup the connections prior to
-            // processing vertices
-/*if[HADOOP_NON_SECURE]
-      workerClient.setup();
-else[HADOOP_NON_SECURE]*/
-            getCentralizedServiceWorker().getWorkerClient()
-                    .setup(getConfig().authenticate());
-            /*end[HADOOP_NON_SECURE]*/
+            GlobalStats globalStats = loadVerticesAndMessagesFromHDFS(superstep);
 
             long endCheckpointRestart = System.currentTimeMillis();
 
@@ -120,7 +93,44 @@ else[HADOOP_NON_SECURE]*/
         }
     }
 
-    protected void loadMessagesFromHDFS(long superstep) {
+    protected GlobalStats loadVerticesAndMessagesFromHDFS(long superstep) throws IOException {
+
+        String finalizedCheckpointPath =
+                getPathManager().createFinalizedCheckpointFilePath(superstep, true);
+
+        GlobalStats globalStats = new GlobalStats();
+
+        loadVerticesFromHDFS(superstep);
+
+        getContext().progress();
+
+        // Load global stats and superstep classes
+
+        SuperstepClasses superstepClasses = SuperstepClasses.createToRead(
+                getConfig());
+
+        DataInputStream finalizedStream =
+                getBspService().getFs().open(new Path(finalizedCheckpointPath));
+        globalStats.readFields(finalizedStream);
+        superstepClasses.readFields(finalizedStream);
+        getConfig().updateSuperstepClasses(superstepClasses);
+        getCentralizedServiceWorker().getServerData().resetMessageStores();
+
+        loadMessagesFromHDFS(superstep);
+
+        // Communication service needs to setup the connections prior to
+        // processing vertices
+/*if[HADOOP_NON_SECURE]
+      workerClient.setup();
+else[HADOOP_NON_SECURE]*/
+        getCentralizedServiceWorker().getWorkerClient()
+                .setup(getConfig().authenticate());
+        /*end[HADOOP_NON_SECURE]*/
+
+        return globalStats;
+    }
+
+    private void loadMessagesFromHDFS(long superstep) {
         if(resetPartitioning){
             loadCheckpointMessagesReset(superstep, previousPartitionsIds, myPartitionIds);
         }
@@ -129,7 +139,7 @@ else[HADOOP_NON_SECURE]*/
         }
     }
 
-    protected void loadVerticesFromHDFS(long superstep) {
+    private void loadVerticesFromHDFS(long superstep) {
         if(resetPartitioning){
             loadCheckpointVerticesReset(superstep, previousPartitionsIds, myPartitionIds);
         }
@@ -175,8 +185,8 @@ else[HADOOP_NON_SECURE]*/
                             }
 
                             Path verticesPath =
-                                    getSavedCheckpoint(superstep,   partitionId +
-                                            CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
+                                    new Path(getPathManager().
+                                            createVerticesCheckpointFilePath(superstep, true, partitionId));
 
                             FSDataInputStream verticesUncompressedStream =
                                     getBspService().getFs().open(verticesPath);
@@ -261,8 +271,8 @@ else[HADOOP_NON_SECURE]*/
                             }
 
                             Path verticesPath =
-                                    getSavedCheckpoint(superstep,   partitionId +
-                                            CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
+                                    new Path(getPathManager().
+                                            createVerticesCheckpointFilePath(superstep, true, partitionId));
 
 
                             FSDataInputStream verticesUncompressedStream =
@@ -370,8 +380,8 @@ else[HADOOP_NON_SECURE]*/
                                     .createPartitionObjectMap();
 
                             Path msgsPath =
-                                    getSavedCheckpoint(superstep,   partitionId +
-                                            CheckpointingUtils.CHECKPOINT_MESSAGES_POSTFIX);
+                                    new Path(getPathManager().
+                                            createMessagesCheckpointFilePath(superstep, true, partitionId));
 
                             FSDataInputStream msgsUncompressedStream =
                                     getBspService().getFs().open(msgsPath);
@@ -463,8 +473,8 @@ else[HADOOP_NON_SECURE]*/
                             }
 
                             Path msgsPath =
-                                    getSavedCheckpoint(superstep,   partitionId +
-                                            CheckpointingUtils.CHECKPOINT_MESSAGES_POSTFIX);
+                                    new Path(getPathManager().
+                                            createMessagesCheckpointFilePath(superstep, true, partitionId));
 
                             FSDataInputStream msgsUncompressedStream =
                                     getBspService().getFs().open(msgsPath);
@@ -505,13 +515,15 @@ else[HADOOP_NON_SECURE]*/
     @Override
     public void storeCheckpoint() throws IOException {
 
-        Path validFilePath = createCheckpointFilePathSafe(
-                getBspService().getWorkerId(getCentralizedServiceWorker().getWorkerInfo())
-                        + CheckpointingUtils.CHECKPOINT_VALID_POSTFIX);
+        long superstep = getBspService().getSuperstep();
 
-        Path metadataFilePath = createCheckpointFilePathSafe(
-                getBspService().getWorkerId(getCentralizedServiceWorker().getWorkerInfo())
-                        + CheckpointingUtils.CHECKPOINT_METADATA_POSTFIX);
+        int workerId = getBspService().getWorkerId(getCentralizedServiceWorker().getWorkerInfo());
+
+        Path validFilePath = deleteAndCreateCheckpointFilePath(
+                getPathManager().createValidCheckpointFilePath(superstep, false, workerId));
+
+        Path metadataFilePath = deleteAndCreateCheckpointFilePath(
+                getPathManager().createMetadataCheckpointFilePath(superstep, false, workerId));
 
         // Metadata is buffered and written at the end since it's small and
         // needs to know how many partitions this worker owns
@@ -557,6 +569,8 @@ else[HADOOP_NON_SECURE]*/
 
         final int numPartitions = getCentralizedServiceWorker().getPartitionStore().getNumPartitions();
 
+        final long superstep = getBspService().getSuperstep();
+
         int numThreads = Math.min(
                 GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfig()),
                 numPartitions);
@@ -584,13 +598,12 @@ else[HADOOP_NON_SECURE]*/
                             if (partition == null) {
                                 break;
                             }
-                            Path verticesPath =
-                                    createCheckpointFilePathSafe( partition.getId() +
-                                            CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
 
-                            Path msgsPath =
-                                    createCheckpointFilePathSafe( partition.getId() +
-                                            CheckpointingUtils.CHECKPOINT_MESSAGES_POSTFIX);
+                            Path verticesPath = deleteAndCreateCheckpointFilePath(
+                                    getPathManager().createVerticesCheckpointFilePath(superstep, false, partition.getId()));
+
+                            Path msgsPath = deleteAndCreateCheckpointFilePath(
+                                    getPathManager().createMessagesCheckpointFilePath(superstep, false, partition.getId()));
 
                             FSDataOutputStream uncompressedVerticesStream =
                                     getBspService().getFs().create(verticesPath);
@@ -606,7 +619,6 @@ else[HADOOP_NON_SECURE]*/
                             DataOutputStream msgsStream = codec == null ? uncompressedMsgsStream :
                                     new DataOutputStream(
                                             codec.createOutputStream(uncompressedMsgsStream));
-
 
                             partition.write(verticesStream);
 
@@ -643,9 +655,8 @@ else[HADOOP_NON_SECURE]*/
         int result = 0;
 
         while (true){
-            Path verticesPath =
-                    getSavedCheckpoint(superstep,   result +
-                            CheckpointingUtils.CHECKPOINT_VERTICES_POSTFIX);
+            Path verticesPath = new Path(getPathManager().
+                    createVerticesCheckpointFilePath(superstep, true, result));
 
             try {
                 if(getBspService().getFs().exists(verticesPath)){
@@ -662,5 +673,13 @@ else[HADOOP_NON_SECURE]*/
         }
 
         return result;
+    }
+
+    public List<Integer> getMyPartitionIds() {
+        return myPartitionIds;
+    }
+
+    public List<Integer> getPreviousPartitionsIds() {
+        return previousPartitionsIds;
     }
 }

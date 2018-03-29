@@ -162,19 +162,6 @@ public abstract class GiraphFileInputFormat<K, V>
   }
 
   /**
-   * Get the checkpoint folder {@link Path}s.
-   *
-   * @param context The job
-   * @return The checkpoint folder {@link Path}s
-   */
-  public static Path[] getCheckpointInputPaths(JobContext context, long restartSuperstep) {
-    String restartJobId = RESTART_JOB_ID.get(context.getConfiguration());
-    String dirs = CheckpointingUtils.getCheckpointBasePath(context.getConfiguration(), restartJobId) + "/" + restartSuperstep + "/vertices/" ;
-
-    return new Path[]{new Path(StringUtils.unEscapeString(dirs))};
-  }
-
-  /**
    * Get the list of edge input {@link Path}s.
    *
    * @param context The job
@@ -281,6 +268,7 @@ end[HADOOP_NON_SECURE]*/
     if (!errors.isEmpty()) {
       throw new InvalidInputException(errors);
     }
+
     LOG.info("Total input paths to process : " + result.size());
     return result;
   }
@@ -304,9 +292,10 @@ end[HADOOP_NON_SECURE]*/
    * @return array of FileStatus objects
    * @throws IOException if zero items.
    */
-  protected List<FileStatus> listCheckpointStatus(JobContext job, long restartSuperstep)
+  protected List<FileStatus> listCheckpointStatus(JobContext job, String checkpointDir)
           throws IOException {
-    return listStatus(job, getCheckpointInputPaths(job, restartSuperstep));
+
+    return listStatus(job, new Path[]{new Path(StringUtils.unEscapeString(checkpointDir))});
   }
 
 
@@ -409,8 +398,8 @@ end[HADOOP_NON_SECURE]*/
    * @return The list of checkpoint input splits
    * @throws IOException
    */
-  public List<InputSplit> getCheckpointSplits(JobContext job, long restartSuperstep) throws IOException {
-    List<FileStatus> files = listCheckpointStatus(job, restartSuperstep);
+  public List<InputSplit> getCheckpointSplits(JobContext job, String checkpointDir) throws IOException {
+    List<FileStatus> files = listCheckpointStatus(job, checkpointDir);
     List<InputSplit> splits = getSplits(job, files);
     // Save the number of input files in the job-conf
     LOG.debug("Total # of checkpoint splits: " + splits.size());

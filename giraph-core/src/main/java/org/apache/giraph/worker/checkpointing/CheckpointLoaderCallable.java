@@ -9,7 +9,7 @@ import org.apache.giraph.io.checkpoint.CheckpointInputFormat;
 import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.giraph.worker.InputSplitsCallable;
 import org.apache.giraph.worker.WorkerInputSplitsHandler;
-import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointWriter;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
@@ -21,12 +21,18 @@ import java.io.IOException;
 
 public class CheckpointLoaderCallable
         <I extends WritableComparable,
-        V extends Writable, E extends Writable>
+                V extends Writable,
+                E extends Writable,
+                M extends Writable>
         extends InputSplitsCallable<I, V, E> {
 
     private final BspServiceWorker<I, V, E> serviceWorker;
 
-    private final VertexCheckpointHandler<I, V, E> vertexCheckpointWriter;
+    private final VertexCheckpointWriter<I, V, E, M> vertexCheckpointWriter;
+
+    private final CheckpointInputFormat<I, E> checkpointInputFormat;
+
+    private final InputType inputType;
 
     private long superstep;
 
@@ -43,23 +49,28 @@ public class CheckpointLoaderCallable
                                     ImmutableClassesGiraphConfiguration<I, V, E> configuration,
                                     BspServiceWorker<I, V, E> bspServiceWorker,
                                     WorkerInputSplitsHandler splitsHandler,
-                                    VertexCheckpointHandler<I, V, E> vertexCheckpointWriter) {
+                                    VertexCheckpointWriter<I, V, E, M> vertexCheckpointWriter,
+                                    CheckpointInputFormat<I, E> checkpointInputFormat,
+                                    InputType inputType) {
 
         super(context, configuration, bspServiceWorker, splitsHandler);
 
+        this.inputType = inputType;
+        this.superstep = superstep;
         this.serviceWorker = bspServiceWorker;
         this.vertexCheckpointWriter = vertexCheckpointWriter;
+        this.checkpointInputFormat = checkpointInputFormat;
     }
 
 
     @Override
     public GiraphInputFormat getInputFormat() {
-        return new CheckpointInputFormat();
+        return this.checkpointInputFormat;
     }
 
     @Override
     public InputType getInputType() {
-        return InputType.CHECKPOINT;
+        return this.inputType;
     }
 
     @Override
@@ -69,6 +80,23 @@ public class CheckpointLoaderCallable
 
         recordReader.initialize(inputSplit, this.serviceWorker.getContext());
 
+        VertexEdgeCount result;
+
+        if(this.inputType == InputType.CHECKPOINT_VERTICES){
+            result = loadVerticesCheckpointSplit(recordReader);
+        }
+        else if(this.inputType == InputType.CHECKPOINT_MESSAGES){
+            result = loadMessagesCheckpointSplit(recordReader);
+        }
+        else {
+            throw new RuntimeException("UNKNOWN INPUT TYPE FOR CHECKPOINT LOADER CALLABLE");
+        }
+
+        return result;
+    }
+
+    private VertexEdgeCount loadVerticesCheckpointSplit(LineRecordReader recordReader) throws IOException {
+
         int vertexCount = 0;
 
         while (recordReader.nextKeyValue()){
@@ -77,7 +105,9 @@ public class CheckpointLoaderCallable
 
             Vertex<I, V, E> vertex = this.vertexCheckpointWriter.readVertex(line.toString());
 
-            workerClientRequestProcessor.addVertexRequest(vertex);
+            workerClientRequestProcessor.sendVertexRequest(
+                    this.serviceWorker.getVertexPartitionOwner(vertex.getId()),
+                    vertex);
 
             vertexCount++;
         }
@@ -85,5 +115,31 @@ public class CheckpointLoaderCallable
         recordReader.close();
 
         return new VertexEdgeCount(vertexCount, 0, 0);
+
+    }
+
+    private VertexEdgeCount loadMessagesCheckpointSplit(LineRecordReader recordReader) throws IOException {
+
+        int messageCount = 0;
+
+        while (recordReader.nextKeyValue()){
+
+            Text line = recordReader.getCurrentValue();
+
+            VertexCheckpointWriter<I, V, E, M>.MessagesInfo<I, M> msgsInfo
+                    = this.vertexCheckpointWriter.readMessagesAndTarget(line.toString());
+
+            I targetId = msgsInfo.getVertexId();
+
+            for (M message : msgsInfo.getMessages()) {
+                workerClientRequestProcessor.sendMessageRequest(targetId, message);
+                messageCount++;
+            }
+
+        }
+
+        recordReader.close();
+
+        return new VertexEdgeCount(messageCount, 0, 0);
     }
 }

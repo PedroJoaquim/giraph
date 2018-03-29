@@ -19,6 +19,7 @@
 package org.apache.giraph.io;
 
 import org.apache.giraph.conf.DefaultImmutableClassesGiraphConfigurable;
+import org.apache.giraph.master.input.BasicInputSplitsMasterOrganizer;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -26,6 +27,7 @@ import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.log4j.Logger;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -42,6 +44,9 @@ import java.util.List;
 public abstract class GiraphInputFormat<I extends WritableComparable,
     V extends Writable, E extends Writable> extends
     DefaultImmutableClassesGiraphConfigurable<I, V, E> {
+  /** Class logger */
+  private static final Logger LOG = Logger.getLogger(GiraphInputFormat.class);
+
   /**
    * Check that input is valid.
    *
@@ -82,6 +87,7 @@ public abstract class GiraphInputFormat<I extends WritableComparable,
   public InputSplit readInputSplit(DataInput dataInput) throws IOException,
       ClassNotFoundException {
     String inputSplitClass = Text.readString(dataInput);
+
     InputSplit inputSplit = (InputSplit) ReflectionUtils.newInstance(
             getConf().getClassByName(inputSplitClass), getConf());
     ((Writable) inputSplit).readFields(dataInput);

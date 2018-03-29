@@ -27,6 +27,7 @@ import java.net.UnknownHostException;
 
 import org.apache.giraph.aggregators.AggregatorWriter;
 import org.apache.giraph.bsp.checkpoints.CheckpointSupportedChecker;
+import org.apache.giraph.checkpointing.CheckpointHandler;
 import org.apache.giraph.combiner.MessageCombiner;
 import org.apache.giraph.edge.OutEdges;
 import org.apache.giraph.edge.ReuseObjectsOutEdges;
@@ -54,8 +55,8 @@ import org.apache.giraph.partition.ReusesObjectsPartition;
 import org.apache.giraph.utils.ReflectionUtils;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
-import org.apache.giraph.worker.checkpointing.CheckpointHandler;
-import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
+import org.apache.giraph.checkpointing.WorkerCheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.net.DNS;
@@ -709,12 +710,12 @@ public class GiraphConfiguration extends Configuration
   }
 
   /**
-   * Get VertexCheckpointHandler class set in configuration.
+   * Get VertexCheckpointWriter class set in configuration.
    *
-   * @return VertexCheckpointHandler class
+   * @return VertexCheckpointWriter class
    */
-  public Class<? extends VertexCheckpointHandler> getVertexCheckpointHandlerClass() {
-    return VERTEX_CHECKPOINT_HANDLER_CLASS.get(this);
+  public Class<? extends VertexCheckpointWriter> getVertexCheckpointWriterClass() {
+    return VERTEX_CHECKPOINT_WRITER_CLASS.get(this);
   }
 
   /**

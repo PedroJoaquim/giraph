@@ -354,6 +354,7 @@ end[PURE_YARN]*/
       context.progress();
       MessageStore<I, Writable> messageStore =
           serviceWorker.getServerData().getCurrentMessageStore();
+
       int numPartitions = serviceWorker.getPartitionStore().getNumPartitions();
       int numThreads = Math.min(numComputeThreads, numPartitions);
       if (LOG.isInfoEnabled()) {

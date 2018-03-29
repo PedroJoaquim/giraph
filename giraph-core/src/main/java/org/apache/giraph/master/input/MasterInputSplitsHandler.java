@@ -23,10 +23,12 @@ import org.apache.giraph.comm.requests.ReplyWithInputSplitRequest;
 import org.apache.giraph.conf.StrConfOption;
 import org.apache.giraph.io.GiraphInputFormat;
 import org.apache.giraph.io.InputType;
+import org.apache.giraph.master.BspServiceMaster;
 import org.apache.giraph.worker.WorkerInfo;
 import org.apache.hadoop.mapreduce.Counter;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.log4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutput;
@@ -56,6 +58,7 @@ public class MasterInputSplitsHandler {
       new StrConfOption("giraph.master.input.doneFractionsToStoreInCounters",
           "0.99,1", "Store in counters timestamps when we finished reading " +
           "these fractions of input");
+
 
   /** Whether to use locality information */
   private final boolean useLocality;
@@ -175,6 +178,7 @@ public class MasterInputSplitsHandler {
     } catch (InterruptedException e) {
       throw new IllegalStateException("Interrupted", e);
     }
+
     byte[] serializedInputSplit =
         splitsMap.get(splitType).getSerializedSplitFor(workerTaskId);
     masterClient.sendWritableRequest(workerTaskId,

@@ -26,6 +26,7 @@ import io.netty.handler.codec.compression.SnappyFramedDecoder;
 import io.netty.handler.codec.compression.SnappyFramedEncoder;
 
 import org.apache.giraph.aggregators.AggregatorWriter;
+import org.apache.giraph.checkpointing.CheckpointHandler;
 import org.apache.giraph.combiner.MessageCombiner;
 import org.apache.giraph.comm.messages.MessageEncodeAndStoreType;
 import org.apache.giraph.edge.Edge;
@@ -50,13 +51,10 @@ import org.apache.giraph.io.EdgeOutputFormat;
 import org.apache.giraph.io.MappingInputFormat;
 import org.apache.giraph.io.VertexInputFormat;
 import org.apache.giraph.io.VertexOutputFormat;
+import org.apache.giraph.io.checkpoint.CheckpointInputFormat;
 import org.apache.giraph.io.filters.EdgeInputFilter;
 import org.apache.giraph.io.filters.VertexInputFilter;
-import org.apache.giraph.io.internal.WrappedEdgeInputFormat;
-import org.apache.giraph.io.internal.WrappedEdgeOutputFormat;
-import org.apache.giraph.io.internal.WrappedMappingInputFormat;
-import org.apache.giraph.io.internal.WrappedVertexInputFormat;
-import org.apache.giraph.io.internal.WrappedVertexOutputFormat;
+import org.apache.giraph.io.internal.*;
 import org.apache.giraph.io.superstep_output.MultiThreadedSuperstepOutput;
 import org.apache.giraph.io.superstep_output.NoOpSuperstepOutput;
 import org.apache.giraph.io.superstep_output.SuperstepOutput;
@@ -84,8 +82,7 @@ import org.apache.giraph.utils.io.DataInputOutput;
 import org.apache.giraph.utils.io.ExtendedDataInputOutput;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
-import org.apache.giraph.worker.checkpointing.CheckpointHandler;
-import org.apache.giraph.worker.checkpointing.io.VertexCheckpointHandler;
+import org.apache.giraph.worker.checkpointing.io.VertexCheckpointWriter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
@@ -118,6 +115,7 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
   private final PerGraphTypeEnum<Language> valueLanguages;
   /** Whether values (IVEMM) need Jython wrappers */
   private final PerGraphTypeBoolean valueNeedsWrappers;
+  ;
 
 
   /**
@@ -509,6 +507,22 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
     return wrappedEdgeInputFormat;
   }
 
+  /**
+   * Create a checkpoint input format,
+   * which makes sure that Configuration parameters are set properly in all
+   * methods related to this format.
+   *
+   * @return Wrapper around user edge input format
+   */
+  public WrappedCheckpointInputFormat<I, E> createWrappedCheckpointInputFormat(String checkpointDir) {
+    WrappedCheckpointInputFormat<I, E> wrappedCheckpointInputFormat =
+            new WrappedCheckpointInputFormat<I, E>(checkpointDir, new CheckpointInputFormat<I, E>(checkpointDir));
+
+    configureIfPossible(wrappedCheckpointInputFormat);
+    return wrappedCheckpointInputFormat;
+  }
+
+
   @Override
   public void setEdgeInputFormatClass(
       Class<? extends EdgeInputFormat> edgeInputFormatClass) {
@@ -768,14 +782,12 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
   /**
    * Create checkpoint handler
    *
-   * @param context Mapper context
-   * @return Instantiated class of CheckpointHandler.
+   * @return Instantiated class of WorkerCheckpointHandler.
    */
-  public CheckpointHandler createCheckpointHandler(
-          Mapper<?, ?, ?, ?>.Context context) {
+  public CheckpointHandler<I, V, E> createCheckpointHandler() {
 
     Class<? extends CheckpointHandler> checkpointHandlerClass = getCheckpointHandlerClass();
-    return ReflectionUtils.newInstance(checkpointHandlerClass, this, context);
+    return ReflectionUtils.newInstance(checkpointHandlerClass, this);
   }
 
   /**
@@ -783,10 +795,10 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
    *
    * @return Instantiated user aggregator writer class
    */
-  public VertexCheckpointHandler<I, V, E> createVertexCheckpointHandler(
+  public <M extends Writable> VertexCheckpointWriter<I, V, E, M> createVertexCheckpointWriter(
           Mapper<?, ?, ?, ?>.Context context) {
 
-    Class<? extends VertexCheckpointHandler> vertexCheckpointHandlerClass = getVertexCheckpointHandlerClass();
+    Class<? extends VertexCheckpointWriter> vertexCheckpointHandlerClass = getVertexCheckpointWriterClass();
 
     return ReflectionUtils.newInstance(vertexCheckpointHandlerClass, this, context);
   }
