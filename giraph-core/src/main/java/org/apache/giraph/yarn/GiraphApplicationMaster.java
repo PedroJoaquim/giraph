@@ -388,18 +388,18 @@ public class GiraphApplicationMaster {
 
     int min = Integer.MAX_VALUE;
 
-    if(minContainerId < min){
-      return minContainerId;
-    }
-    else{
-      for (Container allocatedContainer : allocatedContainers) {
-        int currentId = allocatedContainer.getId().getId();
+    for (Container allocatedContainer : allocatedContainers) {
+      int currentId = allocatedContainer.getId().getId();
 
-        if(currentId < min){
-          min = currentId;
-        }
+      if(currentId < min){
+        min = currentId;
       }
+    }
 
+    if(minContainerId < min) {
+      return minContainerId;
+    } else {
+      minContainerId = min;
       return min;
     }
   }
