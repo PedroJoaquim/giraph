@@ -92,6 +92,8 @@ public class GiraphApplicationMaster {
    * the YarnClient. We will need to export this resource to the tasks also.
    * Construct the HEARTBEAT to use to ping the RM about job progress/health.
    */
+  private static Integer minContainerId = Integer.MAX_VALUE;
+
 //TODO
   /** For status update for clients - yet to be implemented\\
    * Hostname of the container
@@ -364,7 +366,7 @@ public class GiraphApplicationMaster {
 
     int minContainerID = readMinContainerId(allocatedContainers);
 
-    LOG.info("debug-container = minContainerId = " + minContainerID);
+    LOG.info("minContainerId: " + minContainerID);
 
     for (Container allocatedContainer : allocatedContainers) {
       LOG.info("Launching command on a new container." +
@@ -386,15 +388,20 @@ public class GiraphApplicationMaster {
 
     int min = Integer.MAX_VALUE;
 
-    for (Container allocatedContainer : allocatedContainers) {
-      int currentId = allocatedContainer.getId().getId();
-
-      if(currentId < min){
-        min = currentId;
-      }
+    if(minContainerId < min){
+      return minContainerId;
     }
+    else{
+      for (Container allocatedContainer : allocatedContainers) {
+        int currentId = allocatedContainer.getId().getId();
 
-    return min;
+        if(currentId < min){
+          min = currentId;
+        }
+      }
+
+      return min;
+    }
   }
 
   /**
@@ -495,8 +502,6 @@ public class GiraphApplicationMaster {
                                    NMCallbackHandler containerListener,
                                    final int minContainerID) {
 
-      LOG.info("debug-container: creating launch with minContainerId = " + minContainerID);
-      
       this.container = newGiraphTaskContainer;
       this.containerListener = containerListener;
       this.minContainerID = minContainerID;
@@ -563,8 +568,6 @@ public class GiraphApplicationMaster {
      */
     private List<String> generateShellExecCommand() {
 
-      LOG.info("debug-container: generateCommand  containerId = " +  container.getId().getId() + " minId = " + minContainerID + " taskId= " + (container.getId().getId() - minContainerID));
-
       return ImmutableList.of("java " +
               "-Xmx" + heapPerContainer + "M " +
               "-Xms" + heapPerContainer + "M " +
@@ -602,6 +605,9 @@ public class GiraphApplicationMaster {
    * CallbackHandler to process RM async calls
    */
   private class RMCallbackHandler implements AMRMClientAsync.CallbackHandler {
+
+
+
     @SuppressWarnings("unchecked")
     @Override
     public void onContainersCompleted(List<ContainerStatus>
