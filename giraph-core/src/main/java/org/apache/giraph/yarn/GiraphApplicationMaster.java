@@ -364,6 +364,8 @@ public class GiraphApplicationMaster {
 
     int minContainerID = readMinContainerId(allocatedContainers);
 
+    LOG.info("debug-container = minContainerId = " + minContainerID);
+
     for (Container allocatedContainer : allocatedContainers) {
       LOG.info("Launching command on a new container." +
               ", containerId=" + allocatedContainer.getId() +
@@ -492,6 +494,9 @@ public class GiraphApplicationMaster {
     public LaunchContainerRunnable(final Container newGiraphTaskContainer,
                                    NMCallbackHandler containerListener,
                                    final int minContainerID) {
+
+      LOG.info("debug-container: creating launch with minContainerId = " + minContainerID);
+      
       this.container = newGiraphTaskContainer;
       this.containerListener = containerListener;
       this.minContainerID = minContainerID;
@@ -557,6 +562,9 @@ public class GiraphApplicationMaster {
      * @return the BASH shell commands to launch the job.
      */
     private List<String> generateShellExecCommand() {
+
+      LOG.info("debug-container: generateCommand  containerId = " +  container.getId().getId() + " minId = " + minContainerID + " taskId= " + (container.getId().getId() - minContainerID));
+
       return ImmutableList.of("java " +
               "-Xmx" + heapPerContainer + "M " +
               "-Xms" + heapPerContainer + "M " +

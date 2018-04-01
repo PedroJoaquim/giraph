@@ -610,6 +610,7 @@ else[HADOOP_NON_SECURE]*/
     workerGraphPartitioner.finalizePartitionStats(
             partitionStatsList, getPartitionStore());
 
+
     return finishSuperstep(partitionStatsList, null);
   }
 
