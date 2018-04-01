@@ -197,7 +197,9 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
 
           double timeToReadCheckpoint  = readTimeToRestartFromCheckpoint();
 
-          S3InfoSender.uploadInfoToS3(setupSecs, superstepSecsMap, timeToReadCheckpoint, shutdownSecs, totalSecs);
+          double timeToRunMetisPartitioner = this.bspServiceMaster.getTimeToRunMetisPartitioner() / 1000.0d;
+
+          S3InfoSender.uploadInfoToS3(setupSecs, superstepSecsMap, timeToReadCheckpoint, timeToRunMetisPartitioner, shutdownSecs, totalSecs);
         }
         GiraphTimers.getInstance().getTotalMs().
           increment(System.currentTimeMillis() - initializeMillis);

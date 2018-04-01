@@ -190,4 +190,10 @@ public interface CentralizedServiceMaster<I extends WritableComparable,
    */
   void cleanup(SuperstepState superstepState)
     throws IOException, InterruptedException;
+
+
+
+  //TODO -  REMOVE THIS
+
+  long getTimeToRunMetisPartitioner();
 }

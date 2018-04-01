@@ -70,6 +70,7 @@ import org.apache.giraph.utils.WritableUtils;
 import org.apache.giraph.worker.WorkerInfo;
 import org.apache.giraph.zk.BspEvent;
 import org.apache.giraph.zk.PredicateLock;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
@@ -88,15 +89,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.*;
+import java.lang.reflect.Array;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.giraph.conf.GiraphConstants.INPUT_SPLIT_SAMPLE_PERCENT;
@@ -188,6 +183,8 @@ public class BspServiceMaster<I extends WritableComparable,
   private double hdfsCheckpointSecs = 0d;
   /** time to send checkpoints to s3*/
   private double s3CheckpointSecs = 0d;
+  /** time to execute the metis partitioner*/
+  private long timeToRunMetisPartitioner = 0;
 
   /**
    * Constructor for setting up the master.
@@ -1128,8 +1125,226 @@ public class BspServiceMaster<I extends WritableComparable,
     if(getRestartedSuperstep() == getSuperstep() && getCheckpointHandler() instanceof HDFSOptimizedCheckpointHandler){
       coordinateInputSplits();
     }
+
+    if(getSuperstep() == INPUT_SUPERSTEP && getConfiguration().isMETISPartitioning()){
+      doMETISPartitioning();
+    }
+
   }
 
+  private void doMETISPartitioning() {
+
+    //wait workers to finish writing the the adjacency matrix
+    // Coordinate the workers finishing sending their vertices/edges to the
+    // correct workers and signal when everything is done.
+    if (!barrierOnWorkerList(metisPartitionInfoDonePath,
+            chosenWorkerInfoList,
+            getMetisPartitionInfoDoneEvent(),
+            false)) {
+      throw new IllegalStateException("doMETISPartitioning: Worker failed " +
+              "during metis partitioning (currently not supported)");
+    }
+
+    //read adjacency matrixes
+    int[][] partitionsEdgesInfo = readMetisPartitionsInfo();
+
+    //write metis problem,
+    writeMetisProblem(partitionsEdgesInfo);
+
+    //run metis, and read metis
+    int[] partitionAssignmentInfo = runMetisPartitioning();
+
+    //create new partition assignment
+    createAndSendPartitionOwners(partitionAssignmentInfo);
+
+    //signal im done
+    try {
+      getZkExt().createExt(metisMasterDonePath,
+              null,
+              Ids.OPEN_ACL_UNSAFE,
+              CreateMode.PERSISTENT,
+              false);
+    } catch (KeeperException.NodeExistsException e) {
+      LOG.info("coordinateMetisPartitioning: Node " +
+              metisMasterDonePath + " already exists.");
+    } catch (KeeperException e) {
+      throw new IllegalStateException(
+              "coordinateMetisPartitioning: KeeperException", e);
+    } catch (InterruptedException e) {
+      throw new IllegalStateException(
+              "coordinateMetisPartitioning: IllegalStateException", e);
+    }
+  }
+
+  private void createAndSendPartitionOwners(int[] partitionAssignmentInfo) {
+
+    List<PartitionOwner> partitionOwners = new ArrayList<PartitionOwner>();
+
+    for (int i = 0; i < partitionAssignmentInfo.length; i++) {
+      partitionOwners.add(new BasicPartitionOwner(i, this.chosenWorkerInfoList.get(partitionAssignmentInfo[i])));
+    }
+
+    this.masterGraphPartitioner.setPartitionOwners(partitionOwners);
+
+
+    AddressesAndPartitionsWritable addressesAndPartitions =
+            new AddressesAndPartitionsWritable(masterInfo, chosenWorkerInfoList,
+                    partitionOwners);
+
+    for (WorkerInfo workerInfo : chosenWorkerInfoList) {
+      masterClient.sendWritableRequest(workerInfo.getTaskId(),
+              new AddressesAndPartitionsRequest(addressesAndPartitions));
+    }
+  }
+
+  private int[] runMetisPartitioning() {
+
+    String targetMetisInputFile = "/tmp/metis.txt";
+
+    int numWorkers = getWorkerInfoList().size(); //num partitions to metis problem
+
+    long start = System.currentTimeMillis();
+
+    execProcess("gpmetis " + targetMetisInputFile + " " + numWorkers, true, true, "metis-process");
+
+    this.timeToRunMetisPartitioner = System.currentTimeMillis() - start;
+
+    String metisOutputFile = "todo";
+
+    int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
+
+    int[] microPartitionAssignment = new int[numPartitions];
+
+    try {
+
+      Scanner sc = new Scanner(new File("/tmp/metis.txt"));
+      int partitionId = 0;
+      while (sc.hasNextLine()) {
+        microPartitionAssignment[partitionId++] = Integer.parseInt(sc.nextLine());
+      }
+
+      LOG.info("debug-metis: read " + partitionId + " lines, expecting " + numPartitions);
+
+      sc.close();
+    }
+    catch (FileNotFoundException e) {
+      e.printStackTrace();
+    }
+
+    return microPartitionAssignment;
+  }
+
+  private void execProcess(String cmd, boolean printResults, boolean waitProcess, String logRef){
+
+    try {
+      Runtime rt = Runtime.getRuntime();
+
+      Process p = rt.exec(cmd);
+
+      if(waitProcess){
+        p.waitFor();
+      }
+
+      if(printResults){
+
+        BufferedReader stdInput = new BufferedReader(new
+                InputStreamReader(p.getInputStream()));
+
+        BufferedReader stdError = new BufferedReader(new
+                InputStreamReader(p.getErrorStream()));
+
+        String s;
+
+        while ((s = stdInput.readLine()) != null) {
+          LOG.info(logRef + "-input: " + s);
+        }
+
+        // read any errors from the attempted command
+        while ((s = stdError.readLine()) != null) {
+          LOG.info(logRef + "-error: " + s);
+        }
+      }
+
+    } catch (IOException | InterruptedException e) {
+      e.printStackTrace();
+    }
+  }
+
+
+  private void writeMetisProblem(int[][] partitionsEdgesInfo) {
+
+    String targetMetisInputFile = "/tmp/metis.txt";
+    //write file to tmp dir
+
+    int numVertices = partitionsEdgesInfo.length;
+
+    int numEdges = ((numVertices * numVertices) - numVertices)/2;
+
+    try {
+      PrintWriter writer = new PrintWriter(new FileWriter(targetMetisInputFile));
+
+      writer.println(numVertices + " " + numEdges + "001");
+
+      for (int i = 0; i < numVertices; i++) {
+
+        StringBuilder line = new StringBuilder();
+
+        for (int j = 0; j < numVertices; j++) {
+          if(i == j) continue;
+          line.append(j).append(" ").append(partitionsEdgesInfo[i][j] + partitionsEdgesInfo[j][i]).append(" ");
+        }
+
+        line.setLength(line.length() - 1);
+
+        writer.println(line.toString());
+      }
+
+      writer.close();
+
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  private int[][] readMetisPartitionsInfo()  {
+
+    String basePartitionsPath = "_bsp/_partitionInfo/";
+
+    FileSystem fs = getFs();
+
+    int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
+
+    int result[][] = new int[numPartitions][numPartitions];
+
+    try{
+      for (int i = 0; i < numPartitions; i++) {
+
+        Path targetPartitioninfoPath = new Path(basePartitionsPath + i + ".info");
+
+        if(!fs.exists(targetPartitioninfoPath)){
+          throw new IllegalStateException(
+                  "readMetisPartitionsInfo: no partition info for partition " + i);
+        }
+
+        FSDataInputStream fileStream =
+                fs.open(targetPartitioninfoPath);
+
+        for (int j = 0; j < numPartitions; j++) {
+          result[i][j] = fileStream.readInt();
+        }
+
+        fileStream.close();
+
+        LOG.info("debug-metis: read partition " + i + " with partition info = " + Arrays.toString(result[i]));
+      }
+
+    } catch (IOException e) {
+      throw new IllegalStateException(
+              "readMetisPartitionsInfo: reading partition info", e);
+    }
+
+    return result;
+  }
 
 
   /**
@@ -1454,6 +1669,7 @@ public class BspServiceMaster<I extends WritableComparable,
               "coordinateInputSplits: IllegalStateException", e);
     }
   }
+
 
   /**
    * Initialize aggregator at the master side
@@ -2062,5 +2278,9 @@ public class BspServiceMaster<I extends WritableComparable,
     int percentage = (int) gs.getLowestGraphPercentageInMemory().getValue();
     gs.getLowestGraphPercentageInMemory().setValue(
             Math.min(percentage, globalStats.getLowestGraphPercentageInMemory()));
+  }
+
+  public long getTimeToRunMetisPartitioner() {
+    return timeToRunMetisPartitioner;
   }
 }

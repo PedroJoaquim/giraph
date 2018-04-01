@@ -73,17 +73,12 @@ import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.partition.PartitionStats;
 import org.apache.giraph.partition.PartitionStore;
 import org.apache.giraph.partition.WorkerGraphPartitioner;
-import org.apache.giraph.utils.BlockingElementsSet;
-import org.apache.giraph.utils.CallableFactory;
-import org.apache.giraph.utils.JMapHistoDumper;
-import org.apache.giraph.utils.LoggerUtils;
-import org.apache.giraph.utils.MemoryUtils;
-import org.apache.giraph.utils.ProgressableUtils;
-import org.apache.giraph.utils.ReactiveJMapHistoDumper;
-import org.apache.giraph.utils.WritableUtils;
+import org.apache.giraph.utils.*;
 import org.apache.giraph.checkpointing.WorkerCheckpointHandler;
 import org.apache.giraph.zk.BspEvent;
 import org.apache.giraph.zk.PredicateLock;
+import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -448,6 +443,54 @@ public class BspServiceWorker<I extends WritableComparable,
     }
   }
 
+  /**
+   * Mark current worker as done and then wait for master
+   * to finish metis partitioning.
+   */
+  public void markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster() {
+
+    String workerPath =
+            metisPartitionInfoDonePath + "/" + getWorkerInfo().getHostnameId();
+    try {
+      getZkExt().createExt(workerPath,
+              null,
+              Ids.OPEN_ACL_UNSAFE,
+              CreateMode.PERSISTENT,
+              true);
+    } catch (KeeperException e) {
+      throw new IllegalStateException(
+              "markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster: " +
+                      "KeeperException creating worker done writing partition info", e);
+    } catch (InterruptedException e) {
+      throw new IllegalStateException(
+              "markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster: " +
+                      "InterruptedException creating worker done writing partition info", e);
+    }
+
+    while (true) {
+      Stat masterDoneStat;
+      try {
+        masterDoneStat =
+                getZkExt().exists(metisMasterDonePath, true);
+      } catch (KeeperException e) {
+        throw new IllegalStateException(
+                "markCurrentWorkerDoneThenWaitForOthers: " +
+                        "KeeperException waiting on worker done splits", e);
+      } catch (InterruptedException e) {
+        throw new IllegalStateException(
+                "markCurrentWorkerDoneThenWaitForOthers: " +
+                        "InterruptedException waiting on worker done splits", e);
+      }
+      if (masterDoneStat != null) {
+        break;
+      }
+      getMetisMasterDoneEvent().waitForTimeoutOrFail(
+              GiraphConstants.WAIT_FOR_OTHER_WORKERS_TIMEOUT_MSEC.get(
+                      getConfiguration()));
+      getMetisMasterDoneEvent().reset();
+    }
+  }
+
   @Override
   public FinishedSuperstepStats setup() {
     // Unless doing a restart, prepare for computation:
@@ -593,6 +636,10 @@ else[HADOOP_NON_SECURE]*/
       getServerData().getEdgeStore().moveEdgesToVertices();
     }
 
+    if(getConfiguration().isMETISPartitioning()){
+      doMetisPartitioning();
+    }
+
     // Generate the partition stats for the input superstep and process
     // if necessary
     List<PartitionStats> partitionStatsList =
@@ -612,6 +659,82 @@ else[HADOOP_NON_SECURE]*/
 
 
     return finishSuperstep(partitionStatsList, null);
+  }
+
+  private void doMetisPartitioning() {
+
+    //write partition info to hdfs
+    writeMETISPartitionInfo();
+
+    //signal work done and wait master to finish
+    markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster();
+
+    //send partitions across workers - see  workerGraphPartitioner.updatePartitionOwners(...)
+    readMetisPartitionsFromMasterAndExchange();
+  }
+
+  private void readMetisPartitionsFromMasterAndExchange() {
+
+    AddressesAndPartitionsWritable addressesAndPartitions =
+            addressesAndPartitionsHolder.getElement(getContext());
+
+    workerInfoList.clear();
+    workerInfoList = addressesAndPartitions.getWorkerInfos();
+    masterInfo = addressesAndPartitions.getMasterInfo();
+
+    exchangeVertexPartitions(addressesAndPartitions.getPartitionOwners());
+
+  }
+
+  private void writeMETISPartitionInfo() {
+
+    int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
+
+    PartitionStore<I, V, E> partitionStore = getPartitionStore();
+
+    partitionStore.startIteration();
+
+    while (true) {
+
+      Partition<I, V, E> partition =
+              getPartitionStore().getNextPartition();
+
+      if (partition == null) {
+        break;
+      }
+
+      int partitionId = partition.getId();
+
+      LOG.info("debug-metis: worker " + getWorkerInfo().getTaskId() + " writing partition " + partitionId  + " info");
+
+      int[] targetPartitionInfo = new int[numPartitions];
+
+      for (Vertex<I, V, E> vertex : partition) {
+        for (Edge<I, E> edge : vertex.getEdges()) {
+
+          int targetPartition = workerGraphPartitioner.getPartitionOwner(edge.getTargetVertexId()).getPartitionId();
+
+          targetPartitionInfo[targetPartition]++;
+        }
+      }
+
+      Path path = new Path("_bsp/_partitionInfo/" + partitionId + ".info");
+
+      try {
+
+        LOG.info("debug-metis: partition " + partitionId + " with partition info = " + Arrays.toString(targetPartitionInfo));
+
+        FSDataOutputStream fileStream = getFs().create(path);
+        for (int i = 0; i < numPartitions; i++) {
+          fileStream.write(targetPartitionInfo[i]);
+        }
+        fileStream.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+
   }
 
   /**

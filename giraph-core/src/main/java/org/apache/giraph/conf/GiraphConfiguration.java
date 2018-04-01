@@ -1326,4 +1326,8 @@ public class GiraphConfiguration extends Configuration
   public void setVertexAssignmentPath(String path){
     VERTEX_ASSIGNMENT_FILE_PATH.set(this, path);
   }
+
+  public boolean isMETISPartitioning() {
+    return METIS_PARTITIONING.get(this);
+  }
 }

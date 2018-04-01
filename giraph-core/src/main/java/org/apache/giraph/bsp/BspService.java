@@ -64,8 +64,8 @@ import static org.apache.giraph.conf.GiraphConstants.RESTART_JOB_ID;
  */
 @SuppressWarnings("rawtypes")
 public abstract class BspService<I extends WritableComparable,
-    V extends Writable, E extends Writable>
-    implements Watcher, CentralizedService<I, V, E> {
+        V extends Writable, E extends Writable>
+        implements Watcher, CentralizedService<I, V, E> {
   /** Unset superstep */
   public static final long UNSET_SUPERSTEP = Long.MIN_VALUE;
   /** Input superstep (superstep when loading the vertices happens) */
@@ -76,17 +76,21 @@ public abstract class BspService<I extends WritableComparable,
   public static final String BASE_DIR = "/_hadoopBsp";
   /** Master job state znode above base dir */
   public static final String MASTER_JOB_STATE_NODE = "/_masterJobState";
-
   /** Input splits worker done directory */
   public static final String INPUT_SPLITS_WORKER_DONE_DIR =
-      "/_inputSplitsWorkerDoneDir";
+          "/_inputSplitsWorkerDoneDir";
+  /** Metis partition info done directory */
+  public static final String METIS_PARTITION_INFO_DONE_DIR =
+          "/_metisPartitionInfoDoneDir";
+  /** Metis Master done directory */
+  public static final String METIS_MASTER_DONE_PATH =
+          "/_metisMasterDoneDir";
   /** Input splits all done node*/
   public static final String INPUT_SPLITS_ALL_DONE_NODE =
-      "/_inputSplitsAllDone";
-
+          "/_inputSplitsAllDone";
   /** Directory of attempts of this application */
   public static final String APPLICATION_ATTEMPTS_DIR =
-      "/_applicationAttemptsDir";
+          "/_applicationAttemptsDir";
   /** Where the master election happens */
   public static final String MASTER_ELECTION_DIR = "/_masterElectionDir";
   /** Superstep scope */
@@ -97,12 +101,12 @@ public abstract class BspService<I extends WritableComparable,
   public static final String WORKER_UNHEALTHY_DIR = "/_workerUnhealthyDir";
   /** Workers which wrote checkpoint notify here */
   public static final String WORKER_WROTE_CHECKPOINT_DIR =
-      "/_workerWroteCheckpointDir";
+          "/_workerWroteCheckpointDir";
   /** Finished workers notify here */
   public static final String WORKER_FINISHED_DIR = "/_workerFinishedDir";
   /** Helps coordinate the partition exchnages */
   public static final String PARTITION_EXCHANGE_DIR =
-      "/_partitionExchangeDir";
+          "/_partitionExchangeDir";
   /** Denotes that the superstep is done */
   public static final String SUPERSTEP_FINISHED_NODE = "/_superstepFinished";
   /** Denotes that computation should be halted */
@@ -124,10 +128,10 @@ public abstract class BspService<I extends WritableComparable,
   public static final String JSONOBJ_STATE_KEY = "_stateKey";
   /** JSON application attempt key */
   public static final String JSONOBJ_APPLICATION_ATTEMPT_KEY =
-      "_applicationAttemptKey";
+          "_applicationAttemptKey";
   /** JSON superstep key */
   public static final String JSONOBJ_SUPERSTEP_KEY =
-      "_superstepKey";
+          "_superstepKey";
   /** Suffix denotes a worker */
   public static final String WORKER_SUFFIX = "_worker";
   /** Suffix denotes a master */
@@ -141,8 +145,12 @@ public abstract class BspService<I extends WritableComparable,
   protected final String masterJobStatePath;
   /** Input splits worker done directory */
   protected final String inputSplitsWorkerDonePath;
+  /** Metis partition info done directory */
+  protected final String metisPartitionInfoDonePath;
   /** Input splits all done node */
   protected final String inputSplitsAllDonePath;
+  /** master done metis partitioning node */
+  protected final String metisMasterDonePath;
   /** Path to the application attempts) */
   protected final String applicationAttemptsPath;
   /** Path to the cleaned up notifications */
@@ -175,9 +183,13 @@ public abstract class BspService<I extends WritableComparable,
   private final BspEvent masterElectionChildrenChanged;
   /** Cleaned up directory children changed*/
   private final BspEvent cleanedUpChildrenChanged;
+  /** Partition Info done by workers*/
+  private BspEvent metisPartitionInfoDoneEvent;
+  /** Metis master done*/
+  private BspEvent metisMasterDoneEvent;
   /** Registered list of BspEvents */
   private final List<BspEvent> registeredBspEvents =
-      new ArrayList<BspEvent>();
+          new ArrayList<BspEvent>();
   /** Immutable configuration of the job*/
   private final ImmutableClassesGiraphConfiguration<I, V, E> conf;
   /** Job context (mainly for progress) */
@@ -207,6 +219,7 @@ public abstract class BspService<I extends WritableComparable,
   /** Checkpoint Path Manager */
   private final CheckpointPathManager checkpointPathManager;
 
+
   /**
    * Constructor.
    *
@@ -214,8 +227,8 @@ public abstract class BspService<I extends WritableComparable,
    * @param graphTaskManager GraphTaskManager for this compute node
    */
   public BspService(
-      Mapper<?, ?, ?, ?>.Context context,
-      GraphTaskManager<I, V, E> graphTaskManager) {
+          Mapper<?, ?, ?, ?>.Context context,
+          GraphTaskManager<I, V, E> graphTaskManager) {
     this.connectedEvent = new PredicateLock(context);
     this.workerHealthRegistrationChanged = new PredicateLock(context);
     this.applicationAttemptChanged = new PredicateLock(context);
@@ -224,6 +237,8 @@ public abstract class BspService<I extends WritableComparable,
     this.superstepFinished = new PredicateLock(context);
     this.masterElectionChildrenChanged = new PredicateLock(context);
     this.cleanedUpChildrenChanged = new PredicateLock(context);
+    this.metisPartitionInfoDoneEvent = new PredicateLock(context);
+    this.metisMasterDoneEvent = new PredicateLock(context);
 
     registerBspEvent(connectedEvent);
     registerBspEvent(workerHealthRegistrationChanged);
@@ -233,6 +248,8 @@ public abstract class BspService<I extends WritableComparable,
     registerBspEvent(superstepFinished);
     registerBspEvent(masterElectionChildrenChanged);
     registerBspEvent(cleanedUpChildrenChanged);
+    registerBspEvent(metisPartitionInfoDoneEvent);
+    registerBspEvent(metisMasterDoneEvent);
 
     this.context = context;
     this.graphTaskManager = graphTaskManager;
@@ -240,7 +257,7 @@ public abstract class BspService<I extends WritableComparable,
 
     this.jobId = conf.getJobId();
     this.restartedSuperstep = conf.getLong(
-        GiraphConstants.RESTART_SUPERSTEP, UNSET_SUPERSTEP);
+            GiraphConstants.RESTART_SUPERSTEP, UNSET_SUPERSTEP);
 
     try {
       this.hostname = conf.getLocalHostname();
@@ -251,23 +268,23 @@ public abstract class BspService<I extends WritableComparable,
 
     basePath = ZooKeeperManager.getBasePath(conf) + BASE_DIR + "/" + jobId;
     getContext().getCounter(GiraphConstants.ZOOKEEPER_BASE_PATH_COUNTER_GROUP,
-        basePath);
+            basePath);
     masterJobStatePath = basePath + MASTER_JOB_STATE_NODE;
     inputSplitsWorkerDonePath = basePath + INPUT_SPLITS_WORKER_DONE_DIR;
     inputSplitsAllDonePath = basePath + INPUT_SPLITS_ALL_DONE_NODE;
     applicationAttemptsPath = basePath + APPLICATION_ATTEMPTS_DIR;
     cleanedUpPath = basePath + CLEANED_UP_DIR;
-
-
+    metisPartitionInfoDonePath = basePath + METIS_PARTITION_INFO_DONE_DIR;
+    metisMasterDonePath = basePath + METIS_MASTER_DONE_PATH;
 
     String restartJobId = RESTART_JOB_ID.get(conf);
 
     savedCheckpointBasePath =
-        CheckpointingUtils.getCheckpointBasePath(getConfiguration(),
-            restartJobId == null ? getJobId() : restartJobId);
+            CheckpointingUtils.getCheckpointBasePath(getConfiguration(),
+                    restartJobId == null ? getJobId() : restartJobId);
 
     checkpointBasePath = CheckpointingUtils.
-        getCheckpointBasePath(getConfiguration(), getJobId());
+            getCheckpointBasePath(getConfiguration(), getJobId());
 
     this.checkpointHandler = conf.createCheckpointHandler();
     this.checkpointPathManager = this.checkpointHandler.createPathManager(savedCheckpointBasePath, checkpointBasePath);
@@ -277,23 +294,23 @@ public abstract class BspService<I extends WritableComparable,
     haltComputationPath = basePath + HALT_COMPUTATION_NODE;
     memoryObserverPath = basePath + MEMORY_OBSERVER_DIR;
     getContext().getCounter(GiraphConstants.ZOOKEEPER_HALT_NODE_COUNTER_GROUP,
-        haltComputationPath);
+            haltComputationPath);
     if (LOG.isInfoEnabled()) {
       LOG.info("BspService: Path to create to halt is " + haltComputationPath);
     }
     if (LOG.isInfoEnabled()) {
       LOG.info("BspService: Connecting to ZooKeeper with job " + jobId +
-          ", partition " + conf.getTaskPartition() + " on " + serverPortList);
+              ", partition " + conf.getTaskPartition() + " on " + serverPortList);
     }
     try {
       this.zk = new ZooKeeperExt(serverPortList,
-                                 conf.getZooKeeperSessionTimeout(),
-                                 conf.getZookeeperOpsMaxAttempts(),
-                                 conf.getZookeeperOpsRetryWaitMsecs(),
-                                 this,
-                                 context);
+              conf.getZooKeeperSessionTimeout(),
+              conf.getZookeeperOpsMaxAttempts(),
+              conf.getZookeeperOpsRetryWaitMsecs(),
+              this,
+              context);
       connectedEvent.waitForTimeoutOrFail(
-          GiraphConstants.WAIT_ZOOKEEPER_TIMEOUT_MSEC.get(conf));
+              GiraphConstants.WAIT_ZOOKEEPER_TIMEOUT_MSEC.get(conf));
       this.fs = FileSystem.get(getConfiguration());
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -305,7 +322,7 @@ public abstract class BspService<I extends WritableComparable,
 
     //Trying to restart from the latest superstep
     if (restartJobId != null &&
-        restartedSuperstep == UNSET_SUPERSTEP) {
+            restartedSuperstep == UNSET_SUPERSTEP) {
       try {
         restartedSuperstep = getLastCheckpointedSuperstep();
       } catch (IOException e) {
@@ -314,10 +331,10 @@ public abstract class BspService<I extends WritableComparable,
     }
     this.cachedSuperstep = restartedSuperstep;
     if ((restartedSuperstep != UNSET_SUPERSTEP) &&
-        (restartedSuperstep < 0)) {
+            (restartedSuperstep < 0)) {
       throw new IllegalArgumentException(
-          "BspService: Invalid superstep to restart - " +
-              restartedSuperstep);
+              "BspService: Invalid superstep to restart - " +
+                      restartedSuperstep);
     }
   }
 
@@ -331,20 +348,20 @@ public abstract class BspService<I extends WritableComparable,
     int foundSuperstepStart = path.indexOf(SUPERSTEP_DIR);
     if (foundSuperstepStart == -1) {
       throw new IllegalArgumentException(
-          "getSuperstepFromPath: Cannot find " + SUPERSTEP_DIR +
-          "from " + path);
+              "getSuperstepFromPath: Cannot find " + SUPERSTEP_DIR +
+                      "from " + path);
     }
     foundSuperstepStart += SUPERSTEP_DIR.length() + 1;
     int endIndex = foundSuperstepStart +
-        path.substring(foundSuperstepStart).indexOf("/");
+            path.substring(foundSuperstepStart).indexOf("/");
     if (endIndex == -1) {
       throw new IllegalArgumentException(
-          "getSuperstepFromPath: Cannot find end of superstep from " +
-              path);
+              "getSuperstepFromPath: Cannot find end of superstep from " +
+                      path);
     }
     if (LOG.isTraceEnabled()) {
       LOG.trace("getSuperstepFromPath: Got path=" + path +
-          ", start=" + foundSuperstepStart + ", end=" + endIndex);
+              ", start=" + foundSuperstepStart + ", end=" + endIndex);
     }
     return Long.parseLong(path.substring(foundSuperstepStart, endIndex));
   }
@@ -359,8 +376,8 @@ public abstract class BspService<I extends WritableComparable,
     int foundWorkerHealthyStart = path.indexOf(WORKER_HEALTHY_DIR);
     if (foundWorkerHealthyStart == -1) {
       throw new IllegalArgumentException(
-          "getHealthyHostnameidFromPath: Couldn't find " +
-              WORKER_HEALTHY_DIR + " from " + path);
+              "getHealthyHostnameidFromPath: Couldn't find " +
+                      WORKER_HEALTHY_DIR + " from " + path);
     }
     foundWorkerHealthyStart += WORKER_HEALTHY_DIR.length();
     return path.substring(foundWorkerHealthyStart);
@@ -386,9 +403,9 @@ public abstract class BspService<I extends WritableComparable,
    * @return directory path based on the a superstep
    */
   public final String getWorkerInfoHealthyPath(long attempt,
-      long superstep) {
+                                               long superstep) {
     return applicationAttemptsPath + "/" + attempt +
-        SUPERSTEP_DIR + "/" + superstep + WORKER_HEALTHY_DIR;
+            SUPERSTEP_DIR + "/" + superstep + WORKER_HEALTHY_DIR;
   }
 
   /**
@@ -400,9 +417,9 @@ public abstract class BspService<I extends WritableComparable,
    * @return directory path based on the a superstep
    */
   public final String getWorkerInfoUnhealthyPath(long attempt,
-      long superstep) {
+                                                 long superstep) {
     return applicationAttemptsPath + "/" + attempt +
-        SUPERSTEP_DIR + "/" + superstep + WORKER_UNHEALTHY_DIR;
+            SUPERSTEP_DIR + "/" + superstep + WORKER_UNHEALTHY_DIR;
   }
 
   /**
@@ -414,9 +431,9 @@ public abstract class BspService<I extends WritableComparable,
    * @return directory path based on the a superstep
    */
   public final String getWorkerWroteCheckpointPath(long attempt,
-      long superstep) {
+                                                   long superstep) {
     return applicationAttemptsPath + "/" + attempt +
-        SUPERSTEP_DIR + "/" + superstep + WORKER_WROTE_CHECKPOINT_DIR;
+            SUPERSTEP_DIR + "/" + superstep + WORKER_WROTE_CHECKPOINT_DIR;
   }
 
   /**
@@ -429,7 +446,7 @@ public abstract class BspService<I extends WritableComparable,
    */
   public final String getWorkerFinishedPath(long attempt, long superstep) {
     return applicationAttemptsPath + "/" + attempt +
-        SUPERSTEP_DIR + "/" + superstep + WORKER_FINISHED_DIR;
+            SUPERSTEP_DIR + "/" + superstep + WORKER_FINISHED_DIR;
   }
 
   /**
@@ -440,9 +457,9 @@ public abstract class BspService<I extends WritableComparable,
    * @return directory path based on the a superstep
    */
   public final String getPartitionExchangePath(long attempt,
-      long superstep) {
+                                               long superstep) {
     return applicationAttemptsPath + "/" + attempt +
-        SUPERSTEP_DIR + "/" + superstep + PARTITION_EXCHANGE_DIR;
+            SUPERSTEP_DIR + "/" + superstep + PARTITION_EXCHANGE_DIR;
   }
 
   /**
@@ -455,10 +472,10 @@ public abstract class BspService<I extends WritableComparable,
    * @return Path of the desired worker
    */
   public final String getPartitionExchangeWorkerPath(long attempt,
-      long superstep,
-      WorkerInfo workerInfo) {
+                                                     long superstep,
+                                                     WorkerInfo workerInfo) {
     return getPartitionExchangePath(attempt, superstep) +
-        "/" + workerInfo.getHostnameId();
+            "/" + workerInfo.getHostnameId();
   }
 
   /**
@@ -470,7 +487,7 @@ public abstract class BspService<I extends WritableComparable,
    */
   public final String getSuperstepFinishedPath(long attempt, long superstep) {
     return applicationAttemptsPath + "/" + attempt +
-        SUPERSTEP_DIR + "/" + superstep + SUPERSTEP_FINISHED_NODE;
+            SUPERSTEP_DIR + "/" + superstep + SUPERSTEP_FINISHED_NODE;
   }
 
   /**
@@ -515,7 +532,7 @@ public abstract class BspService<I extends WritableComparable,
   public final void setRestartedSuperstep(long superstep) {
     if (superstep < INPUT_SUPERSTEP) {
       throw new IllegalArgumentException(
-          "setRestartedSuperstep: Bad argument " + superstep);
+              "setRestartedSuperstep: Bad argument " + superstep);
     }
     restartedSuperstep = superstep;
   }
@@ -570,6 +587,14 @@ public abstract class BspService<I extends WritableComparable,
     return inputSplitsAllDoneEvent;
   }
 
+  public final BspEvent getMetisPartitionInfoDoneEvent() {
+    return metisPartitionInfoDoneEvent;
+  }
+
+  public final BspEvent getMetisMasterDoneEvent() {
+    return metisMasterDoneEvent;
+  }
+
   public final BspEvent getSuperstepFinishedEvent() {
     return superstepFinished;
   }
@@ -592,46 +617,46 @@ public abstract class BspService<I extends WritableComparable,
   public final JSONObject getJobState() {
     try {
       getZkExt().createExt(masterJobStatePath,
-          null,
-          Ids.OPEN_ACL_UNSAFE,
-          CreateMode.PERSISTENT,
-          true);
+              null,
+              Ids.OPEN_ACL_UNSAFE,
+              CreateMode.PERSISTENT,
+              true);
     } catch (KeeperException.NodeExistsException e) {
       LOG.info("getJobState: Job state already exists (" +
-          masterJobStatePath + ")");
+              masterJobStatePath + ")");
     } catch (KeeperException e) {
       throw new IllegalStateException("Failed to create job state path " +
-          "due to KeeperException", e);
+              "due to KeeperException", e);
     } catch (InterruptedException e) {
       throw new IllegalStateException("Failed to create job state path " +
-          "due to InterruptedException", e);
+              "due to InterruptedException", e);
     }
     String jobState = null;
     try {
       List<String> childList =
-          getZkExt().getChildrenExt(
-              masterJobStatePath, true, true, true);
+              getZkExt().getChildrenExt(
+                      masterJobStatePath, true, true, true);
       if (childList.isEmpty()) {
         return null;
       }
       jobState =
-          new String(getZkExt().getData(childList.get(childList.size() - 1),
-              true, null), Charset.defaultCharset());
+              new String(getZkExt().getData(childList.get(childList.size() - 1),
+                      true, null), Charset.defaultCharset());
     } catch (KeeperException.NoNodeException e) {
       LOG.info("getJobState: Job state path is empty! - " +
-          masterJobStatePath);
+              masterJobStatePath);
     } catch (KeeperException e) {
       throw new IllegalStateException("Failed to get job state path " +
-          "children due to KeeperException", e);
+              "children due to KeeperException", e);
     } catch (InterruptedException e) {
       throw new IllegalStateException("Failed to get job state path " +
-          "children due to InterruptedException", e);
+              "children due to InterruptedException", e);
     }
     try {
       return new JSONObject(jobState);
     } catch (JSONException e) {
       throw new RuntimeException(
-          "getJobState: Failed to parse job state " + jobState);
+              "getJobState: Failed to parse job state " + jobState);
     }
   }
 
@@ -655,36 +680,36 @@ public abstract class BspService<I extends WritableComparable,
     }
     try {
       getZkExt().createExt(applicationAttemptsPath,
-          null,
-          Ids.OPEN_ACL_UNSAFE,
-          CreateMode.PERSISTENT,
-          true);
+              null,
+              Ids.OPEN_ACL_UNSAFE,
+              CreateMode.PERSISTENT,
+              true);
     } catch (KeeperException.NodeExistsException e) {
       LOG.info("getApplicationAttempt: Node " +
-          applicationAttemptsPath + " already exists!");
+              applicationAttemptsPath + " already exists!");
     } catch (KeeperException e) {
       throw new IllegalStateException("Couldn't create application " +
-          "attempts path due to KeeperException", e);
+              "attempts path due to KeeperException", e);
     } catch (InterruptedException e) {
       throw new IllegalStateException("Couldn't create application " +
-          "attempts path due to InterruptedException", e);
+              "attempts path due to InterruptedException", e);
     }
     try {
       List<String> attemptList =
-          getZkExt().getChildrenExt(
-              applicationAttemptsPath, true, false, false);
+              getZkExt().getChildrenExt(
+                      applicationAttemptsPath, true, false, false);
       if (attemptList.isEmpty()) {
         cachedApplicationAttempt = 0;
       } else {
         cachedApplicationAttempt =
-            Long.parseLong(Collections.max(attemptList));
+                Long.parseLong(Collections.max(attemptList));
       }
     } catch (KeeperException e) {
       throw new IllegalStateException("Couldn't get application " +
-          "attempts to KeeperException", e);
+              "attempts to KeeperException", e);
     } catch (InterruptedException e) {
       throw new IllegalStateException("Couldn't get application " +
-          "attempts to InterruptedException", e);
+              "attempts to InterruptedException", e);
     }
 
     return cachedApplicationAttempt;
@@ -702,39 +727,39 @@ public abstract class BspService<I extends WritableComparable,
     String superstepPath = getSuperstepPath(getApplicationAttempt());
     try {
       getZkExt().createExt(superstepPath,
-          null,
-          Ids.OPEN_ACL_UNSAFE,
-          CreateMode.PERSISTENT,
-          true);
+              null,
+              Ids.OPEN_ACL_UNSAFE,
+              CreateMode.PERSISTENT,
+              true);
     } catch (KeeperException.NodeExistsException e) {
       if (LOG.isInfoEnabled()) {
         LOG.info("getApplicationAttempt: Node " +
-            applicationAttemptsPath + " already exists!");
+                applicationAttemptsPath + " already exists!");
       }
     } catch (KeeperException e) {
       throw new IllegalStateException(
-          "getSuperstep: KeeperException", e);
+              "getSuperstep: KeeperException", e);
     } catch (InterruptedException e) {
       throw new IllegalStateException(
-          "getSuperstep: InterruptedException", e);
+              "getSuperstep: InterruptedException", e);
     }
 
     List<String> superstepList;
     try {
       superstepList =
-          getZkExt().getChildrenExt(superstepPath, true, false, false);
+              getZkExt().getChildrenExt(superstepPath, true, false, false);
     } catch (KeeperException e) {
       throw new IllegalStateException(
-          "getSuperstep: KeeperException", e);
+              "getSuperstep: KeeperException", e);
     } catch (InterruptedException e) {
       throw new IllegalStateException(
-          "getSuperstep: InterruptedException", e);
+              "getSuperstep: InterruptedException", e);
     }
     if (superstepList.isEmpty()) {
       cachedSuperstep = INPUT_SUPERSTEP;
     } else {
       cachedSuperstep =
-          Long.parseLong(Collections.max(superstepList));
+              Long.parseLong(Collections.max(superstepList));
     }
 
     return cachedSuperstep;
@@ -746,8 +771,8 @@ public abstract class BspService<I extends WritableComparable,
   public final void incrCachedSuperstep() {
     if (cachedSuperstep == UNSET_SUPERSTEP) {
       throw new IllegalStateException(
-          "incrSuperstep: Invalid unset cached superstep " +
-              UNSET_SUPERSTEP);
+              "incrSuperstep: Invalid unset cached superstep " +
+                      UNSET_SUPERSTEP);
     }
     ++cachedSuperstep;
   }
@@ -773,22 +798,22 @@ public abstract class BspService<I extends WritableComparable,
     String superstepPath = getSuperstepPath(cachedApplicationAttempt);
     try {
       getZkExt().createExt(superstepPath,
-          null,
-          Ids.OPEN_ACL_UNSAFE,
-          CreateMode.PERSISTENT,
-          true);
+              null,
+              Ids.OPEN_ACL_UNSAFE,
+              CreateMode.PERSISTENT,
+              true);
     } catch (KeeperException.NodeExistsException e) {
       throw new IllegalArgumentException(
-          "setApplicationAttempt: Attempt already exists! - " +
-              superstepPath, e);
+              "setApplicationAttempt: Attempt already exists! - " +
+                      superstepPath, e);
     } catch (KeeperException e) {
       throw new RuntimeException(
-          "setApplicationAttempt: KeeperException - " +
-              superstepPath, e);
+              "setApplicationAttempt: KeeperException - " +
+                      superstepPath, e);
     } catch (InterruptedException e) {
       throw new RuntimeException(
-          "setApplicationAttempt: InterruptedException - " +
-              superstepPath, e);
+              "setApplicationAttempt: InterruptedException - " +
+                      superstepPath, e);
     }
   }
 
@@ -829,8 +854,8 @@ public abstract class BspService<I extends WritableComparable,
     // 2. Process specific derived class events
     if (LOG.isDebugEnabled()) {
       LOG.debug("process: Got a new event, path = " + event.getPath() +
-          ", type = " + event.getType() + ", state = " +
-          event.getState());
+              ", type = " + event.getType() + ", state = " +
+              event.getState());
     }
 
     if ((event.getPath() == null) && (event.getType() == EventType.None)) {
@@ -840,7 +865,7 @@ public abstract class BspService<I extends WritableComparable,
           bspEvent.signal();
         }
         LOG.warn("process: Disconnected from ZooKeeper (will automatically " +
-            "try to recover) " + event);
+                "try to recover) " + event);
       } else if (event.getState() == KeeperState.SyncConnected) {
         if (LOG.isInfoEnabled()) {
           LOG.info("process: Asynchronous connection complete.");
@@ -859,62 +884,77 @@ public abstract class BspService<I extends WritableComparable,
       masterElectionChildrenChanged.signal();
       eventProcessed = true;
     } else if ((event.getPath().contains(WORKER_HEALTHY_DIR) ||
-        event.getPath().contains(WORKER_UNHEALTHY_DIR)) &&
-        (event.getType() == EventType.NodeChildrenChanged)) {
+            event.getPath().contains(WORKER_UNHEALTHY_DIR)) &&
+            (event.getType() == EventType.NodeChildrenChanged)) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("process: workerHealthRegistrationChanged " +
-            "(worker health reported - healthy/unhealthy )");
+                "(worker health reported - healthy/unhealthy )");
       }
       workerHealthRegistrationChanged.signal();
       eventProcessed = true;
     } else if (event.getPath().contains(INPUT_SPLITS_ALL_DONE_NODE) &&
-        event.getType() == EventType.NodeCreated) {
+            event.getType() == EventType.NodeCreated) {
       if (LOG.isInfoEnabled()) {
         LOG.info("process: all input splits done");
       }
       inputSplitsAllDoneEvent.signal();
       eventProcessed = true;
     } else if (event.getPath().contains(INPUT_SPLITS_WORKER_DONE_DIR) &&
-        event.getType() == EventType.NodeChildrenChanged) {
+            event.getType() == EventType.NodeChildrenChanged) {
       if (LOG.isDebugEnabled()) {
         LOG.debug("process: worker done reading input splits");
       }
       inputSplitsWorkerDoneEvent.signal();
       eventProcessed = true;
     } else if (event.getPath().contains(SUPERSTEP_FINISHED_NODE) &&
-        event.getType() == EventType.NodeCreated) {
+            event.getType() == EventType.NodeCreated) {
       if (LOG.isInfoEnabled()) {
         LOG.info("process: superstepFinished signaled");
       }
       superstepFinished.signal();
       eventProcessed = true;
     } else if (event.getPath().endsWith(applicationAttemptsPath) &&
-        event.getType() == EventType.NodeChildrenChanged) {
+            event.getType() == EventType.NodeChildrenChanged) {
       if (LOG.isInfoEnabled()) {
         LOG.info("process: applicationAttemptChanged signaled");
       }
       applicationAttemptChanged.signal();
       eventProcessed = true;
     } else if (event.getPath().contains(MASTER_ELECTION_DIR) &&
-        event.getType() == EventType.NodeChildrenChanged) {
+            event.getType() == EventType.NodeChildrenChanged) {
       if (LOG.isInfoEnabled()) {
         LOG.info("process: masterElectionChildrenChanged signaled");
       }
       masterElectionChildrenChanged.signal();
       eventProcessed = true;
     } else if (event.getPath().equals(cleanedUpPath) &&
-        event.getType() == EventType.NodeChildrenChanged) {
+            event.getType() == EventType.NodeChildrenChanged) {
       if (LOG.isInfoEnabled()) {
         LOG.info("process: cleanedUpChildrenChanged signaled");
       }
       cleanedUpChildrenChanged.signal();
       eventProcessed = true;
+    } else if (event.getPath().equals(METIS_PARTITION_INFO_DONE_DIR) &&
+            event.getType() == EventType.NodeChildrenChanged) {
+      if (LOG.isInfoEnabled()) {
+        LOG.info("process: metisPartitionInfo signaled");
+      }
+      metisPartitionInfoDoneEvent.signal();
+      eventProcessed = true;
+    } else if (event.getPath().equals(METIS_MASTER_DONE_PATH) &&
+            event.getType() == EventType.NodeChildrenChanged) {
+      if (LOG.isInfoEnabled()) {
+        LOG.info("process: metisMasterDone signaled");
+      }
+      metisMasterDoneEvent.signal();
+      eventProcessed = true;
     }
+
 
     if (!(processEvent(event)) && (!eventProcessed)) {
       LOG.warn("process: Unknown and unprocessed event (path=" +
-          event.getPath() + ", type=" + event.getType() +
-          ", state=" + event.getState() + ")");
+              event.getPath() + ", type=" + event.getType() +
+              ", state=" + event.getState() + ")");
     }
   }
 

@@ -1391,4 +1391,5 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
   public String getJobId() {
     return get("mapred.job.id", "UnknownJob");
   }
+
 }
