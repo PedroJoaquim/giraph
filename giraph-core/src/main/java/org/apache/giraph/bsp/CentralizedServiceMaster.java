@@ -196,4 +196,8 @@ public interface CentralizedServiceMaster<I extends WritableComparable,
   //TODO -  REMOVE THIS
 
   long getTimeToRunMetisPartitioner();
+
+  long getEdgeCut();
+
+  long getNumEdges();
 }

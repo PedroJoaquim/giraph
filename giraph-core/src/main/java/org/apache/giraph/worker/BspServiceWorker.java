@@ -18,6 +18,7 @@
 
 package org.apache.giraph.worker;
 
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.*;
@@ -404,6 +405,7 @@ public class BspServiceWorker<I extends WritableComparable,
   public void markCurrentWorkerDoneReadingThenWaitForOthers() {
     String workerInputSplitsDonePath =
             inputSplitsWorkerDonePath + "/" + getWorkerInfo().getHostnameId();
+
     try {
       getZkExt().createExt(workerInputSplitsDonePath,
               null,
@@ -451,6 +453,7 @@ public class BspServiceWorker<I extends WritableComparable,
 
     String workerPath =
             metisPartitionInfoDonePath + "/" + getWorkerInfo().getHostnameId();
+
     try {
       getZkExt().createExt(workerPath,
               null,
@@ -489,6 +492,7 @@ public class BspServiceWorker<I extends WritableComparable,
                       getConfiguration()));
       getMetisMasterDoneEvent().reset();
     }
+
   }
 
   @Override
@@ -500,6 +504,7 @@ public class BspServiceWorker<I extends WritableComparable,
     // 4. Wait until the INPUT_SPLIT_ALL_DONE_PATH node has been created
     // 5. Process any mutations deriving from add edge requests
     // 6. Wait for superstep INPUT_SUPERSTEP to complete.
+
     if (getRestartedSuperstep() != UNSET_SUPERSTEP) {
       setCachedSuperstep(getRestartedSuperstep());
       return new FinishedSuperstepStats(0, false, 0, 0, true,
@@ -535,6 +540,7 @@ public class BspServiceWorker<I extends WritableComparable,
     // Add the partitions that this worker owns
     Collection<? extends PartitionOwner> masterSetPartitionOwners =
             startSuperstep();
+
     workerGraphPartitioner.updatePartitionOwners(
             getWorkerInfo(), masterSetPartitionOwners);
 
@@ -637,7 +643,11 @@ else[HADOOP_NON_SECURE]*/
     }
 
     if(getConfiguration().isMETISPartitioning()){
+      long start = System.currentTimeMillis();
       doMetisPartitioning();
+      long end = System.currentTimeMillis();
+
+      LOG.info("debug-metis: worker metis time = " + ((end-start)/1000.0d) + " secs");
     }
 
     // Generate the partition stats for the input superstep and process
@@ -671,6 +681,7 @@ else[HADOOP_NON_SECURE]*/
 
     //send partitions across workers - see  workerGraphPartitioner.updatePartitionOwners(...)
     readMetisPartitionsFromMasterAndExchange();
+
   }
 
   private void readMetisPartitionsFromMasterAndExchange() {
@@ -683,57 +694,75 @@ else[HADOOP_NON_SECURE]*/
     masterInfo = addressesAndPartitions.getMasterInfo();
 
     exchangeVertexPartitions(addressesAndPartitions.getPartitionOwners());
-
   }
 
   private void writeMETISPartitionInfo() {
 
-    int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
+    final int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
 
-    PartitionStore<I, V, E> partitionStore = getPartitionStore();
+    int numThreads = Math.min(
+            GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
+            numPartitions);
+
+    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
 
     partitionStore.startIteration();
 
-    while (true) {
+    CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
+      @Override
+      public Callable<Void> newCallable(int callableId) {
+        return new Callable<Void>() {
 
-      Partition<I, V, E> partition =
-              getPartitionStore().getNextPartition();
+          @Override
+          public Void call() {
+            while (true) {
 
-      if (partition == null) {
-        break;
+              Partition<I, V, E> partition =
+                      partitionStore.getNextPartition();
+
+              if (partition == null) {
+                break;
+              }
+
+              int partitionId = partition.getId();
+
+              long[] targetPartitionInfo = new long[numPartitions];
+
+              for (Vertex<I, V, E> vertex : partition) {
+                for (Edge<I, E> edge : vertex.getEdges()) {
+
+                  int targetPartition = workerGraphPartitioner.getPartitionOwner(edge.getTargetVertexId()).getPartitionId();
+
+                  targetPartitionInfo[targetPartition]++;
+                }
+              }
+
+              partitionStore.putPartition(partition);
+
+              Path path = new Path("_bsp/_partitionInfo/" + partitionId + ".info");
+
+              try {
+
+                FSDataOutputStream fileStream = getFs().create(path);
+
+                for (int i = 0; i < numPartitions; i++) {
+                  fileStream.writeLong(targetPartitionInfo[i]);
+                }
+
+                fileStream.close();
+              } catch (IOException e) {
+                e.printStackTrace();
+              }
+            }
+
+            return null;
+          }
+        };
       }
+    };
 
-      int partitionId = partition.getId();
-
-      LOG.info("debug-metis: worker " + getWorkerInfo().getTaskId() + " writing partition " + partitionId  + " info");
-
-      int[] targetPartitionInfo = new int[numPartitions];
-
-      for (Vertex<I, V, E> vertex : partition) {
-        for (Edge<I, E> edge : vertex.getEdges()) {
-
-          int targetPartition = workerGraphPartitioner.getPartitionOwner(edge.getTargetVertexId()).getPartitionId();
-
-          targetPartitionInfo[targetPartition]++;
-        }
-      }
-
-      Path path = new Path("_bsp/_partitionInfo/" + partitionId + ".info");
-
-      try {
-
-        LOG.info("debug-metis: partition " + partitionId + " with partition info = " + Arrays.toString(targetPartitionInfo));
-
-        FSDataOutputStream fileStream = getFs().create(path);
-        for (int i = 0; i < numPartitions; i++) {
-          fileStream.write(targetPartitionInfo[i]);
-        }
-        fileStream.close();
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
-
+    ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+            "metis-write-%d", getContext());
 
   }
 

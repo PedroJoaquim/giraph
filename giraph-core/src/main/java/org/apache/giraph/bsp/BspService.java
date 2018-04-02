@@ -934,15 +934,15 @@ public abstract class BspService<I extends WritableComparable,
       }
       cleanedUpChildrenChanged.signal();
       eventProcessed = true;
-    } else if (event.getPath().equals(METIS_PARTITION_INFO_DONE_DIR) &&
+    } else if (event.getPath().contains(METIS_PARTITION_INFO_DONE_DIR) &&
             event.getType() == EventType.NodeChildrenChanged) {
       if (LOG.isInfoEnabled()) {
         LOG.info("process: metisPartitionInfo signaled");
       }
       metisPartitionInfoDoneEvent.signal();
       eventProcessed = true;
-    } else if (event.getPath().equals(METIS_MASTER_DONE_PATH) &&
-            event.getType() == EventType.NodeChildrenChanged) {
+    } else if (event.getPath().contains(METIS_MASTER_DONE_PATH) &&
+            event.getType() == EventType.NodeCreated) {
       if (LOG.isInfoEnabled()) {
         LOG.info("process: metisMasterDone signaled");
       }

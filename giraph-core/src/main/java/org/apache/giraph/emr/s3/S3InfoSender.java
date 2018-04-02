@@ -17,11 +17,25 @@ public class S3InfoSender extends S3Com {
     private static String CLUSTER_NAME_JSON_NAME = "jobFlowId";
 
 
-    public static void uploadInfoToS3(double setupSecs, Map<Long, Double> superstepSecsMap, double timeToReadCheckpoint, double timeToRunMetis, double shutdownSecs, double totalSecs) {
+    public static void uploadInfoToS3(double setupSecs,
+                                      Map<Long, Double> superstepSecsMap,
+                                      double timeToReadCheckpoint,
+                                      long numEdges,
+                                      long edgeCut,
+                                      double timeToRunMetis,
+                                      double shutdownSecs,
+                                      double totalSecs) {
 
         final String clusterID = readClusterInfo(CLUSTER_NAME_JSON_NAME);
 
-        writeTmpFile(setupSecs, superstepSecsMap, timeToReadCheckpoint, timeToRunMetis, shutdownSecs, totalSecs);
+        writeTmpFile(setupSecs,
+                superstepSecsMap,
+                timeToReadCheckpoint,
+                numEdges,
+                edgeCut,
+                timeToRunMetis,
+                shutdownSecs,
+                totalSecs);
 
         uploadToS3(clusterID);
     }
@@ -42,7 +56,14 @@ public class S3InfoSender extends S3Com {
         execProcess(cmd, true, true, "s3-info-upload");
     }
 
-    private static void writeTmpFile(double setupSecs, Map<Long, Double> superstepSecsMap, double timeToReadCheckpoint, double timeToRunMetis, double shutdownSecs, double totalSecs) {
+    private static void writeTmpFile(double setupSecs,
+                                     Map<Long, Double> superstepSecsMap,
+                                     double timeToReadCheckpoint,
+                                     long numEdges,
+                                     long edgeCut,
+                                     double timeToRunMetis,
+                                     double shutdownSecs,
+                                     double totalSecs) {
 
         PrintWriter writer = null;
 
@@ -56,6 +77,8 @@ public class S3InfoSender extends S3Com {
                 writer.println(entry.getKey() + "#" + entry.getValue());
             }
 
+            writer.println(numEdges);
+            writer.println(edgeCut);
             writer.println(timeToRunMetis);
             writer.println(shutdownSecs);
             writer.println(totalSecs);
