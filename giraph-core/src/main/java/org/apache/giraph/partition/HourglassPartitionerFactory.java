@@ -24,7 +24,6 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
     public HourglassPartitionerFactory() {
         readVertexToPartitionMapping();
-        readPartitionToWorkerMapping();
     }
 
     private void readPartitionToWorkerMapping() {
@@ -78,9 +77,10 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
             reader = new BufferedReader(new InputStreamReader(in, Charsets.UTF_8));
 
+            long id = 0;
+
             while ((line = reader.readLine()) != null) {
-                String[] split = SEPARATOR.split(line);
-                vertexToPartitionMapping.put(Long.valueOf(split[0]), Integer.valueOf(split[1]));
+                vertexToPartitionMapping.put(Long.valueOf(id++), Integer.valueOf(line));
             }
 
         } catch (IOException e) {
@@ -106,6 +106,6 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
     @Override
     public int getWorker(int partition, int partitionCount, int workerCount) {
-        return this.partitionToWorkerMapping.get(partition);
+        return partition % workerCount;
     }
 }

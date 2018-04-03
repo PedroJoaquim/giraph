@@ -18,6 +18,7 @@
 
 package org.apache.giraph.utils;
 
+import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -108,5 +109,9 @@ public class CheckpointingUtils {
 
   public static boolean isRestartInfoFile(Path file) {
     return file.getName().endsWith(RESTART_CHECKPOINT_TIME_POSTFIX);
+  }
+
+  public static  String getPartitionInfoPath(ImmutableClassesGiraphConfiguration configuration) {
+   return "_bsp/_partitionInfo" + configuration.getJobId() + "/";
   }
 }

@@ -1308,13 +1308,15 @@ public interface GiraphConstants {
           "giraph.vertexAssignmentFile", "vertex-assignment.txt",
           "file that describes the assignment between vertex and partitions");
 
-  /**
-   * For worker to worker communication we can use IPs or host names, by
-   * default prefer IPs.
-   */
+
   BooleanConfOption METIS_PARTITIONING =
           new BooleanConfOption("giraph.metisPartitioning", false,
                   "METIS partitioning");
+
+  BooleanConfOption METIS_OLD =
+          new BooleanConfOption("giraph.metisOld", false,
+                  "METIS OLD");
+
 
 }
 // CHECKSTYLE: resume InterfaceIsTypeCheck

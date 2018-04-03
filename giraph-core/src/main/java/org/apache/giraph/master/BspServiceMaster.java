@@ -20,6 +20,8 @@ package org.apache.giraph.master;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import it.unimi.dsi.fastutil.ints.*;
+import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import net.iharder.Base64;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.giraph.bsp.ApplicationState;
@@ -40,7 +42,6 @@ import org.apache.giraph.conf.GiraphConfiguration;
 import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.counters.GiraphStats;
-import org.apache.giraph.edge.Edge;
 import org.apache.giraph.graph.*;
 import org.apache.giraph.io.EdgeInputFormat;
 import org.apache.giraph.io.GiraphInputFormat;
@@ -64,7 +65,7 @@ import org.apache.giraph.worker.WorkerInfo;
 import org.apache.giraph.zk.BspEvent;
 import org.apache.giraph.zk.PredicateLock;
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FSDataOutputStream;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
@@ -83,7 +84,6 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.*;
-import java.lang.reflect.Array;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -183,6 +183,7 @@ public class BspServiceMaster<I extends WritableComparable,
     private long timeToRunMetisPartitioner = 0;
     /** edge cut*/
     private long edgeCut;
+
     private long numEdges;
 
     /**
@@ -1151,15 +1152,21 @@ public class BspServiceMaster<I extends WritableComparable,
 
         LOG.info("debug-metis: time waiting for workers = " + (end - start)/1000.0d + " secs");
 
+        Int2LongOpenHashMap[] partitionAdjacencyInfo;
+
         //read adjacency matrixes
-        long[][] partitionsEdgesInfo = readMetisPartitionsInfo();
+        if(getConfiguration().isMeTISOld()){
+            partitionAdjacencyInfo = readMetisPartitionsInfoOld();
+        } else {
+            partitionAdjacencyInfo = readMetisPartitionsInfo();
+        }
 
         long end2 = System.currentTimeMillis();
 
         LOG.info("debug-metis: time reading info " + (end2 - end)/1000.0d + " secs");
 
         //write metis problem,
-        writeMetisProblem(partitionsEdgesInfo);
+        writeMetisProblem(partitionAdjacencyInfo);
 
         long end3 = System.currentTimeMillis();
 
@@ -1174,7 +1181,7 @@ public class BspServiceMaster<I extends WritableComparable,
         LOG.info("debug-metis: time running metis " + this.timeToRunMetisPartitioner/1000.0d + " secs");
 
         //create new partition assignment
-        createAndSendPartitionOwners(partitionsEdgesInfo, partitionAssignmentInfo);
+        createAndSendPartitionOwners(partitionAssignmentInfo);
 
         //signal im done
         try {
@@ -1216,19 +1223,15 @@ public class BspServiceMaster<I extends WritableComparable,
         this.numEdges = numEdges;
     }
 
-    private void createAndSendPartitionOwners(long[][] partitionsEdgesInfo, int[] partitionAssignmentInfo) {
+    private void createAndSendPartitionOwners(int[] partitionAssignmentInfo) {
 
         List<PartitionOwner> newPartitionOwners = new ArrayList<PartitionOwner>();
-
-        int[] oldPartitionAssignmentInfo = new int[this.masterGraphPartitioner.getCurrentPartitionOwners().size()];
 
         for (PartitionOwner po : this.masterGraphPartitioner.getCurrentPartitionOwners()) {
 
             int partitionId = po.getPartitionId();
             WorkerInfo previousWorkerInfo = po.getWorkerInfo();
             WorkerInfo currentWorkerInfo = this.chosenWorkerInfoList.get(partitionAssignmentInfo[partitionId]);
-
-            oldPartitionAssignmentInfo[partitionId] = previousWorkerInfo.getTaskId();
 
             if(previousWorkerInfo.getTaskId() == currentWorkerInfo.getTaskId()){
                 newPartitionOwners.add(new BasicPartitionOwner(partitionId, currentWorkerInfo));
@@ -1238,14 +1241,6 @@ public class BspServiceMaster<I extends WritableComparable,
             }
 
         }
-
-        calcEdgeCut(partitionsEdgesInfo, oldPartitionAssignmentInfo);
-
-        LOG.info("debug-metis: hash edge-cut = " + this.edgeCut);
-
-        calcEdgeCut(partitionsEdgesInfo, partitionAssignmentInfo);
-
-        LOG.info("debug-metis: micro-metis edge-cut = " + this.edgeCut);
 
         this.masterGraphPartitioner.setPartitionOwners(newPartitionOwners);
 
@@ -1332,38 +1327,40 @@ public class BspServiceMaster<I extends WritableComparable,
     }
 
 
-    private void writeMetisProblem(long[][] partitionsEdgesInfo) {
+    private void writeMetisProblem(Int2LongOpenHashMap[] partitionsEdgesInfo) {
 
         String targetMetisInputFile = "/tmp/metis.txt";
         //write file to tmp dir
-
         int numVertices = partitionsEdgesInfo.length;
 
-        int numEdges = ((numVertices * numVertices) - numVertices)/2;
+        long start = System.currentTimeMillis();
+        int numEdges = calcNumEdgesForMetis(partitionsEdgesInfo);
+        long end = System.currentTimeMillis();
 
-        int zeroWeightEdges = 0;
-
+        LOG.info("debug-metis: time to calcNumEdges = " + (end-start)/1000.0d + " secs");
         try {
             PrintWriter writer = new PrintWriter(new FileWriter(targetMetisInputFile));
 
             writer.println(numVertices + " " + numEdges + " 001");
 
-            for (int i = 1; i <= numVertices; i++) {
+            for (int i = 0; i < numVertices; i++) {
+
+                Int2LongOpenHashMap targetMap = partitionsEdgesInfo[i];
 
                 StringBuilder line = new StringBuilder();
 
-                for (int j = 1; j <= numVertices; j++) {
-                    if(i == j) continue;
+                ObjectIterator<Int2LongMap.Entry> entryObjectIterator = targetMap.int2LongEntrySet().fastIterator();
 
-                    long realWeight = partitionsEdgesInfo[i-1][j-1] + partitionsEdgesInfo[j-1][i-1];
+                while (entryObjectIterator.hasNext()){
 
-                    if(realWeight == 0){
-                        zeroWeightEdges++;
+                    Int2LongMap.Entry next = entryObjectIterator.next();
+
+                    int key = next.getIntKey();
+                    long weight = next.getLongValue() + partitionsEdgesInfo[key].get(i);
+
+                    if(weight > 0){
+                        line.append((key+1)).append(" ").append(weight).append(" ");
                     }
-
-                    long weight = Math.max(1, partitionsEdgesInfo[i-1][j-1] + partitionsEdgesInfo[j-1][i-1]);
-
-                    line.append(j).append(" ").append(weight).append(" ");
                 }
 
                 line.setLength(line.length() - 1);
@@ -1373,22 +1370,42 @@ public class BspServiceMaster<I extends WritableComparable,
 
             writer.close();
 
-            LOG.info("debug-metis: zero weight edges = " + zeroWeightEdges);
+            long nulFullEdges = ((numVertices*numVertices)-numVertices)/2;
+
+            LOG.info("debug-metis: fullConnectedGraph = " + nulFullEdges +
+                    " numEdges = " + numEdges + "(" + ((numEdges*100)/nulFullEdges) + "%)");
 
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    private long[][] readMetisPartitionsInfo()  {
+    private int calcNumEdgesForMetis(Int2LongOpenHashMap[] partitionsEdgesInfo) {
 
-        final String basePartitionsPath = "_bsp/_partitionInfo/";
+        int numEdges = 0;
+
+        for (int i = 0; i < partitionsEdgesInfo.length; i++) {
+
+            for (int j = 0; j < i; j++) {
+
+                long weight = partitionsEdgesInfo[i].get(j) + partitionsEdgesInfo[j].get(i);
+
+                if(weight > 0) numEdges++;
+            }
+        }
+
+        return numEdges;
+    }
+
+    private Int2LongOpenHashMap[] readMetisPartitionsInfo()  {
+
+        final String basePartitionsPath = CheckpointingUtils.getPartitionInfoPath(getConfiguration());
 
         final FileSystem fs = getFs();
 
         final int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
 
-        final long result[][] = new long[numPartitions][numPartitions];
+        final Int2LongOpenHashMap[] partitionsAdjacency = new Int2LongOpenHashMap[numPartitions];
 
         int numThreads = Math.min(
                 GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
@@ -1401,12 +1418,15 @@ public class BspServiceMaster<I extends WritableComparable,
             partitionIdQueue.add(i);
         }
 
-        CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
+        CallableFactory<Long> callableFactory = new CallableFactory<Long>() {
             @Override
-            public Callable<Void> newCallable(int callableId) {
-                return new Callable<Void>() {
+            public Callable<Long> newCallable(int callableId) {
+                return new Callable<Long>() {
                     @Override
-                    public Void call() throws IOException {
+                    public Long call() throws IOException {
+
+                        long totalRandomEdgeCut = 0;
+
                         while (!partitionIdQueue.isEmpty()) {
 
                             Integer partitionId = partitionIdQueue.poll();
@@ -1425,24 +1445,160 @@ public class BspServiceMaster<I extends WritableComparable,
                             FSDataInputStream fileStream =
                                     fs.open(targetPartitioninfoPath);
 
-                            for (int j = 0; j < numPartitions; j++) {
-                                result[partitionId][j] = fileStream.readLong();
+                            Int2LongOpenHashMap partitionMap = new Int2LongOpenHashMap();
+                            partitionMap.defaultReturnValue(0);
+
+                            long edgeCut;
+
+                            while (true){
+
+                                int targetPartitionId = fileStream.readInt();
+                                long numEdges = fileStream.readLong();
+
+                                if(targetPartitionId == -1){
+                                    edgeCut = numEdges;
+                                    break;
+                                }
+
+                                partitionMap.put(targetPartitionId, numEdges);
                             }
+
+                            totalRandomEdgeCut += edgeCut;
+
+                            partitionsAdjacency[partitionId] = partitionMap;
 
                             fileStream.close();
 
-
                         }
-                        return null;
+
+                        return totalRandomEdgeCut;
                     }
                 };
             }
         };
 
-        ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+        List<Long> infoList = ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
                 "metis-read-%d", getContext());
 
-        return result;
+        long totalRandomEdgeCut = 0;
+
+        for (Long info :
+                infoList) {
+
+            totalRandomEdgeCut += info;
+        }
+
+        LOG.info("debug-metis: Random Micro Partitioning edge cut = " + totalRandomEdgeCut/2);
+
+        return partitionsAdjacency;
+
+    }
+
+
+    private Int2LongOpenHashMap[] readMetisPartitionsInfoOld()  {
+
+        final FileSystem fs = getFs();
+
+        final int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
+
+        final Int2LongOpenHashMap[] partitionsAdjacency = new Int2LongOpenHashMap[numPartitions];
+
+        int numThreads = Math.min(
+                GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
+                numPartitions);
+
+        final Queue<FileStatus> fsQueue =
+                new ConcurrentLinkedQueue<>();
+
+        FileStatus[] fileStatuses;
+
+        try {
+            fileStatuses = fs.listStatus(new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration())));
+            fsQueue.addAll(Arrays.asList(fileStatuses));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+
+        CallableFactory<Long> callableFactory = new CallableFactory<Long>() {
+
+            @Override
+            public Callable<Long> newCallable(int callableId) {
+                return new Callable<Long>() {
+                    @Override
+                    public Long call() throws IOException {
+
+                        long totalRandomEdgeCut = 0;
+
+                        while (!fsQueue.isEmpty()) {
+
+                            FileStatus targetFile = fsQueue.poll();
+
+                            if (targetFile == null) {
+                                break;
+                            }
+
+                            Path targetPartitionInfoPath = targetFile.getPath();
+
+                            if (!targetPartitionInfoPath.getName().endsWith(".info")) {
+                                continue;
+                            }
+
+                            FSDataInputStream fileStream =
+                                    fs.open(targetPartitionInfoPath);
+
+                            int size = fileStream.readInt();
+
+                            for (int j = 0; j < size; j++) {
+
+                                int partitionId = fileStream.readInt();
+
+                                Int2LongOpenHashMap partitionMap = new Int2LongOpenHashMap();
+                                partitionMap.defaultReturnValue(0);
+
+                                long edgeCut;
+
+                                while (true){
+
+                                    int targetPartitionId = fileStream.readInt();
+                                    long numEdges = fileStream.readLong();
+
+                                    if(targetPartitionId == -1){
+                                        edgeCut = numEdges;
+                                        break;
+                                    }
+
+                                    partitionMap.put(targetPartitionId, numEdges);
+                                }
+
+                                totalRandomEdgeCut += edgeCut;
+
+                                partitionsAdjacency[partitionId] = partitionMap;
+
+                            }
+
+                            fileStream.close();
+
+                        }
+
+                        return totalRandomEdgeCut;
+                    }
+                };
+            }
+        };
+
+        List<Long> infoList = ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+                "metis-read-%d", getContext());
+
+        long totalRandomEdgeCut = 0;
+
+        for (Long info : infoList) {
+            totalRandomEdgeCut += info;
+        }
+
+        LOG.info("debug-metis: Random Micro Partitioning edge cut = " + totalRandomEdgeCut/2);
+
+        return partitionsAdjacency;
     }
 
 
