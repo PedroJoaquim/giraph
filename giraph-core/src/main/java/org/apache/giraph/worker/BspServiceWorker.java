@@ -644,11 +644,18 @@ else[HADOOP_NON_SECURE]*/
     }
 
     if(getConfiguration().isMETISPartitioning()){
-      long start = System.currentTimeMillis();
-      doMetisPartitioning();
-      long end = System.currentTimeMillis();
 
-      LOG.info("debug-metis: worker metis time = " + ((end-start)/1000.0d) + " secs");
+      if(getConfiguration().isGreedyMetisPartitioning()){
+        long start1 = System.currentTimeMillis();
+        reassignVerticesWithinPartitionsMetisGreedy();
+        long end1 = System.currentTimeMillis();
+      }
+
+      long start1 = System.currentTimeMillis();
+      doMetisPartitioning();
+      long end1 = System.currentTimeMillis();
+
+      LOG.info("debug-metis: worker metis time = " + ((end1-start1)/1000.0d) + " secs");
     }
 
     // Generate the partition stats for the input superstep and process
@@ -670,6 +677,10 @@ else[HADOOP_NON_SECURE]*/
 
 
     return finishSuperstep(partitionStatsList, null);
+  }
+
+  private void reassignVerticesWithinPartitionsMetisGreedy() {
+    //TODO
   }
 
   private void doMetisPartitioning() {

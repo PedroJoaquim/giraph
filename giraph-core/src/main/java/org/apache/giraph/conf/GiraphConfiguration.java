@@ -1331,6 +1331,10 @@ public class GiraphConfiguration extends Configuration
     return METIS_PARTITIONING.get(this);
   }
 
+  public boolean isGreedyMetisPartitioning() {
+    return METIS_GREEDY_PARTITIONING.get(this);
+  }
+
   public boolean isMeTISOld(){
     return METIS_OLD.get(this);
   }

@@ -1338,10 +1338,13 @@ public class BspServiceMaster<I extends WritableComparable,
         long end = System.currentTimeMillis();
 
         LOG.info("debug-metis: time to calcNumEdges = " + (end-start)/1000.0d + " secs");
+
         try {
             PrintWriter writer = new PrintWriter(new FileWriter(targetMetisInputFile));
 
             writer.println(numVertices + " " + numEdges + " 001");
+
+            long numEdgesDone = 0;
 
             for (int i = 0; i < numVertices; i++) {
 
@@ -1360,6 +1363,7 @@ public class BspServiceMaster<I extends WritableComparable,
 
                     if(weight > 0){
                         line.append((key+1)).append(" ").append(weight).append(" ");
+                        numEdgesDone++;
                     }
                 }
 
@@ -1369,6 +1373,8 @@ public class BspServiceMaster<I extends WritableComparable,
             }
 
             writer.close();
+
+            LOG.info("debug-metis: edges count = " + numEdges + " num edges done = " + numEdgesDone);
 
             long nulFullEdges = ((numVertices*numVertices)-numVertices)/2;
 
@@ -1383,6 +1389,8 @@ public class BspServiceMaster<I extends WritableComparable,
     private int calcNumEdgesForMetis(Int2LongOpenHashMap[] partitionsEdgesInfo) {
 
         int numEdges = 0;
+
+        LOG.info("debug-metis: calc num edges to partitions number = " + partitionsEdgesInfo.length);
 
         for (int i = 0; i < partitionsEdgesInfo.length; i++) {
 
@@ -1543,6 +1551,8 @@ public class BspServiceMaster<I extends WritableComparable,
                             if (!targetPartitionInfoPath.getName().endsWith(".info")) {
                                 continue;
                             }
+
+                            LOG.info("debug-metis: processsing file from worker " + targetPartitionInfoPath.getName());
 
                             FSDataInputStream fileStream =
                                     fs.open(targetPartitionInfoPath);

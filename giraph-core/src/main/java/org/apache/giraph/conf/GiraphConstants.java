@@ -1314,9 +1314,12 @@ public interface GiraphConstants {
                   "METIS partitioning");
 
   BooleanConfOption METIS_OLD =
-          new BooleanConfOption("giraph.metisOld", false,
+          new BooleanConfOption("giraph.metisOld", true,
                   "METIS OLD");
 
+  BooleanConfOption METIS_GREEDY_PARTITIONING =
+          new BooleanConfOption("giraph.metisGreedy", false,
+                  "METIS GREEDY PARTITIONING");
 
 }
 // CHECKSTYLE: resume InterfaceIsTypeCheck
