@@ -1310,7 +1310,7 @@ public interface GiraphConstants {
 
   /** Name of the file in hdfs the vertices to partition assignment information */
   StrConfOption VERTEX_ASSIGNMENT_FILE_PATH = new StrConfOption(
-          "giraph.vertexAssignmentFile", "vertex-assignment.txt",
+          "giraph.vertexAssignmentFile", "_bsp/_vertexMapping/",
           "file that describes the assignment between vertex and partitions");
 
 
@@ -1318,9 +1318,11 @@ public interface GiraphConstants {
           new BooleanConfOption("giraph.metisPartitioning", false,
                   "METIS partitioning");
 
-  BooleanConfOption METIS_OLD =
-          new BooleanConfOption("giraph.metisOld", true,
-                  "METIS OLD");
+  BooleanConfOption UNDIRECTED_GRAPH =
+          new BooleanConfOption("giraph.undirectedGraph", true,
+                  "Undirected input graph");
+
+
 
 }
 // CHECKSTYLE: resume InterfaceIsTypeCheck

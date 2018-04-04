@@ -22,6 +22,7 @@ import java.io.IOException;
 
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.Edge;
+import org.apache.giraph.edge.EdgeFactory;
 import org.apache.giraph.graph.VertexEdgeCount;
 import org.apache.giraph.io.EdgeInputFormat;
 import org.apache.giraph.io.EdgeReader;
@@ -167,6 +168,7 @@ public class EdgeInputSplitsCallable<I extends WritableComparable,
       }
       I sourceId = edgeReader.getCurrentSourceId();
       Edge<I, E> readerEdge = edgeReader.getCurrentEdge();
+
       if (sourceId == null) {
         throw new IllegalArgumentException(
             "readInputSplit: Edge reader returned an edge " +
@@ -188,6 +190,11 @@ public class EdgeInputSplitsCallable<I extends WritableComparable,
             .getMappingStoreOps()
             .embedTargetInfo(sourceId);
         bspServiceWorker
+                .getLocalData()
+                .getMappingStoreOps()
+                .embedTargetInfo(sourceId);
+
+        bspServiceWorker
             .getLocalData()
             .getMappingStoreOps()
             .embedTargetInfo(readerEdge.getTargetVertexId());
@@ -205,6 +212,36 @@ public class EdgeInputSplitsCallable<I extends WritableComparable,
       }
 
       workerClientRequestProcessor.sendEdgeRequest(sourceId, readerEdge);
+
+      if(configuration.isUndirectedGraph()){
+
+        I sourceId2 = readerEdge.getTargetVertexId();
+        Edge<I, E> readerEdge2 = EdgeFactory.create(sourceId, readerEdge.getValue());
+
+        if (canEmbedInIds) {
+          bspServiceWorker
+                  .getLocalData()
+                  .getMappingStoreOps()
+                  .embedTargetInfo(sourceId2);
+          bspServiceWorker
+                  .getLocalData()
+                  .getMappingStoreOps()
+                  .embedTargetInfo(readerEdge2.getTargetVertexId());
+        }
+
+        ++inputSplitEdgesLoaded;
+
+        if (edgeInputFilter.dropEdge(sourceId2, readerEdge2)) {
+          ++inputSplitEdgesFiltered;
+          if (inputSplitEdgesFiltered % EDGES_FILTERED_UPDATE_PERIOD == 0) {
+            totalEdgesFiltered.inc(inputSplitEdgesFiltered);
+            inputSplitEdgesFiltered = 0;
+          }
+          continue;
+        }
+
+        workerClientRequestProcessor.sendEdgeRequest(sourceId2, readerEdge2);
+      }
 
       // Update status every EDGES_UPDATE_PERIOD edges
       if (inputSplitEdgesLoaded % EDGES_UPDATE_PERIOD == 0) {

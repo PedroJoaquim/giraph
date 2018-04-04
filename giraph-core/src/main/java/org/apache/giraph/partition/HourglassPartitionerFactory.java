@@ -5,98 +5,118 @@ import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.giraph.bsp.BspService;
+import org.apache.giraph.conf.GiraphConstants;
+import org.apache.giraph.graph.Vertex;
+import org.apache.giraph.metis.GreedyMetisPartitionBalancer;
+import org.apache.giraph.utils.CallableFactory;
+import org.apache.giraph.utils.CheckpointingUtils;
+import org.apache.giraph.utils.ProgressableUtils;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
+import org.apache.log4j.Logger;
 
 import java.io.*;
+import java.util.Arrays;
+import java.util.Queue;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.regex.Pattern;
 
 public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
         extends GraphPartitionerFactory<LongWritable, V, E> {
 
-    private static final Pattern SEPARATOR = Pattern.compile("[\t ]");
+    /** Class logger */
+    private static final Logger LOG = Logger.getLogger(HourglassPartitionerFactory.class);
 
     private Long2IntMap vertexToPartitionMapping;
 
-    private Int2IntMap partitionToWorkerMapping;
+    public HourglassPartitionerFactory(BspService<LongWritable, V, E> service) {
+        long start = System.currentTimeMillis();
+        readVertexToPartitionMapping(service);
+        long end = System.currentTimeMillis();
 
-    public HourglassPartitionerFactory() {
-        readVertexToPartitionMapping();
+        LOG.info("debug-metis: time to read vertex mapping from hdfs = " + (end -start)/1000.0d + " secs");
     }
 
-    private void readPartitionToWorkerMapping() {
-        String line;
 
-        BufferedReader reader = null;
+    private void readVertexToPartitionMapping(BspService<LongWritable, V, E> service) {
 
-        partitionToWorkerMapping = new Int2IntOpenHashMap();
+        final Queue<FileStatus> fsQueue =
+                new ConcurrentLinkedQueue<>();
 
-        try {
-            String partitionAssignmentPath = getConf().getPartitionAssignmentPath();
+        FileStatus[] fileStatuses;
 
-            DataInputStream in =
-                    FileSystem.get(getConf()).open(new Path(partitionAssignmentPath));
+        final Long2IntMap vertexMapping = new Long2IntOpenHashMap();
 
-            reader = new BufferedReader(new InputStreamReader(in, Charsets.UTF_8));
-
-            while ((line = reader.readLine()) != null) {
-                String[] split = SEPARATOR.split(line);
-                partitionToWorkerMapping.put(Integer.valueOf(split[0]), Integer.valueOf(split[1]));
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        finally {
-            if(reader != null){
-                try {
-                    reader.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-
-        }
-    }
-
-    private void readVertexToPartitionMapping() {
-
-        String line;
-
-        BufferedReader reader = null;
-
-        vertexToPartitionMapping = new Long2IntOpenHashMap();
+        final FileSystem fs = service.getFs();
 
         try {
-            String vertexAssignmentPath = getConf().getVertexAssignmentPath();
-
-            DataInputStream in =
-                    FileSystem.get(getConf()).open(new Path(vertexAssignmentPath));
-
-            reader = new BufferedReader(new InputStreamReader(in, Charsets.UTF_8));
-
-            long id = 0;
-
-            while ((line = reader.readLine()) != null) {
-                vertexToPartitionMapping.put(Long.valueOf(id++), Integer.valueOf(line));
-            }
-
+            fileStatuses = fs.listStatus(new Path(service.getConfiguration().getVertexAssignmentPath()));
+            fsQueue.addAll(Arrays.asList(fileStatuses));
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
         }
-        finally {
-            if(reader != null){
-                try {
-                    reader.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+
+        int numThreads = Math.min(
+                GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(service.getConfiguration()),
+                fileStatuses.length);
+
+
+        CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
+            @Override
+            public Callable<Void> newCallable(int callableId) {
+                return new Callable<Void>() {
+                    @Override
+                    public Void call() throws IOException {
+
+                        while (!fsQueue.isEmpty()) {
+
+                            FileStatus targetFile = fsQueue.poll();
+
+                            if (targetFile == null) {
+                                break;
+                            }
+
+                            Path targetPartitionInfoPath = targetFile.getPath();
+
+                            if (!targetPartitionInfoPath.getName().endsWith(".mapping")) {
+                                continue;
+                            }
+
+                            FSDataInputStream fileStream =
+                                    fs.open(targetPartitionInfoPath);
+
+                            int partitionId = fileStream.readInt();
+
+                            long numVertices = fileStream.readLong();
+
+                            long[] ids = new long[(int)numVertices];
+
+                            for (int i = 0; i < numVertices; i++) {
+                                ids[i] = fileStream.readLong();
+                            }
+
+                            fileStream.close();
+
+                            synchronized (vertexMapping){
+                                for (int i = 0; i < ids.length; i++) {
+                                    vertexMapping.put(ids[i], partitionId);
+                                }
+                            }
+                        }
+
+                        return null;
+                    }
+                };
             }
+        };
 
-        }
+        ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+                "metis-read-%d", service.getContext());
 
+        this.vertexToPartitionMapping = vertexMapping;
     }
 
     @Override
@@ -106,6 +126,6 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
     @Override
     public int getWorker(int partition, int partitionCount, int workerCount) {
-        return partition % workerCount;
+        return -1; //not used
     }
 }

@@ -24,6 +24,8 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -113,5 +115,9 @@ public class CheckpointingUtils {
 
   public static  String getPartitionInfoPath(ImmutableClassesGiraphConfiguration configuration) {
    return "_bsp/_partitionInfo" + configuration.getJobId() + "/";
+  }
+
+  public static <E extends Writable, V extends Writable, I extends WritableComparable> String getMetisInputFileName(ImmutableClassesGiraphConfiguration<I, V, E> configuration) {
+    return "/tmp/metis_" + configuration.getJobId() + ".txt";
   }
 }

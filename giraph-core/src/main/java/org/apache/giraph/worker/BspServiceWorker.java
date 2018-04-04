@@ -71,12 +71,7 @@ import org.apache.giraph.metrics.ResetSuperstepMetricsObserver;
 import org.apache.giraph.metrics.SuperstepMetricsRegistry;
 import org.apache.giraph.metrics.WorkerSuperstepMetrics;
 import org.apache.giraph.ooc.OutOfCoreEngine;
-import org.apache.giraph.partition.Partition;
-import org.apache.giraph.partition.PartitionExchange;
-import org.apache.giraph.partition.PartitionOwner;
-import org.apache.giraph.partition.PartitionStats;
-import org.apache.giraph.partition.PartitionStore;
-import org.apache.giraph.partition.WorkerGraphPartitioner;
+import org.apache.giraph.partition.*;
 import org.apache.giraph.utils.*;
 import org.apache.giraph.checkpointing.WorkerCheckpointHandler;
 import org.apache.giraph.zk.BspEvent;
@@ -124,7 +119,7 @@ public class BspServiceWorker<I extends WritableComparable,
   /** Worker info */
   private final WorkerInfo workerInfo;
   /** Worker graph partitioner */
-  private final WorkerGraphPartitioner<I, V, E> workerGraphPartitioner;
+  private WorkerGraphPartitioner<I, V, E> workerGraphPartitioner;
   /** Local Data for each worker */
   private final LocalData<I, V, E, ? extends Writable> localData;
   /** Used to translate Edges during vertex input phase based on localData */
@@ -652,17 +647,11 @@ else[HADOOP_NON_SECURE]*/
 
     if(getConfiguration().isMETISPartitioning()){
 
-      if(this.metisPartitionBalancer != null){
-        long start1 = System.currentTimeMillis();
-        this.metisPartitionBalancer.reassignPartitions(this);
-        long end1 = System.currentTimeMillis();
-      }
-
       long start1 = System.currentTimeMillis();
       doMetisPartitioning();
-      long end1 = System.currentTimeMillis();
+      long end2 = System.currentTimeMillis();
 
-      LOG.info("debug-metis: worker metis time = " + ((end1-start1)/1000.0d) + " secs");
+      LOG.info("debug-metis: full worker metis time = " + ((end2-start1)/1000.0d) + " secs");
     }
 
     // Generate the partition stats for the input superstep and process
@@ -688,17 +677,28 @@ else[HADOOP_NON_SECURE]*/
 
   private void doMetisPartitioning() {
 
-    //write partition info to hdfs
+    if(this.metisPartitionBalancer != null){
+
+      long start1 = System.currentTimeMillis();
+      this.metisPartitionBalancer.reassignPartitions(this);
+      long end1 = System.currentTimeMillis();
+
+      LOG.info("debug-metis: worker metis rebalancing time = " + ((end1-start1)/1000.0d) + " secs");
+    }
+
+
     try {
-      if(getConfiguration().isMeTISOld()){
-        writeMETISPartitionInfoOld();
-      }
-      else {
-        writeMETISPartitionInfo();
-      }
+
+      //write partition info to hdfs
+      writeMETISPartitionInfo();
 
       //signal work done and wait master to finish
       markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster();
+
+      if(this.metisPartitionBalancer != null){
+        this.workerGraphPartitioner =
+                this.metisPartitionBalancer.getGraphPartitionerFactory(this).createWorkerGraphPartitioner();
+      }
 
       //send partitions across workers - see  workerGraphPartitioner.updatePartitionOwners(...)
       readMetisPartitionsFromMasterAndExchange();
@@ -721,86 +721,7 @@ else[HADOOP_NON_SECURE]*/
     exchangeVertexPartitions(addressesAndPartitions.getPartitionOwners());
   }
 
-  private void writeMETISPartitionInfo()  {
-
-    final int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
-
-    int numThreads = Math.min(
-            GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
-            numPartitions);
-
-    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
-
-    partitionStore.startIteration();
-
-    CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
-      @Override
-      public Callable<Void> newCallable(int callableId) {
-        return new Callable<Void>() {
-
-          @Override
-          public Void call() {
-            while (true) {
-
-              Partition<I, V, E> partition =
-                      partitionStore.getNextPartition();
-
-              if (partition == null) {
-                break;
-              }
-
-              int partitionId = partition.getId();
-
-              long[] targetPartitionInfo = new long[numPartitions];
-
-              for (Vertex<I, V, E> vertex : partition) {
-                for (Edge<I, E> edge : vertex.getEdges()) {
-
-                  int targetPartition = workerGraphPartitioner.getPartitionOwner(edge.getTargetVertexId()).getPartitionId();
-
-                  targetPartitionInfo[targetPartition]++;
-                }
-              }
-
-              partitionStore.putPartition(partition);
-
-              Path path = new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + partitionId + ".info");
-
-              try {
-
-                FSDataOutputStream fileStream = getFs().create(path);
-                long totalEdgeCut = 0;
-
-                for (int i = 0; i < numPartitions; i++) {
-                  if(targetPartitionInfo[i] > 0 && i != partitionId){
-                    fileStream.writeInt(i);
-                    fileStream.writeLong(targetPartitionInfo[i]);
-                    totalEdgeCut += targetPartitionInfo[i];
-                  }
-                }
-
-                fileStream.writeInt(-1);
-                fileStream.writeLong(totalEdgeCut);
-
-                fileStream.close();
-              } catch (IOException e) {
-                e.printStackTrace();
-              }
-            }
-
-            return null;
-          }
-        };
-      }
-    };
-
-    ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
-            "metis-write-%d", getContext());
-
-  }
-
-
-  private void writeMETISPartitionInfoOld() throws IOException {
+  private void writeMETISPartitionInfo() throws IOException {
 
     final int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
 
@@ -858,7 +779,9 @@ else[HADOOP_NON_SECURE]*/
                   if(targetPartitionInfo[i] > 0 && i != partitionId){
                     fileStream.writeInt(i);
                     fileStream.writeLong(targetPartitionInfo[i]);
-                    totalEdgeCut += targetPartitionInfo[i];
+                    if(!partitionStore.hasPartition(i)){
+                      totalEdgeCut += targetPartitionInfo[i];
+                    }
                   }
                 }
 
@@ -1624,6 +1547,7 @@ else[HADOOP_NON_SECURE]*/
     Set<WorkerInfo> myDependencyWorkerSet =
             partitionExchange.getMyDependencyWorkerSet();
     Set<String> workerIdSet = new HashSet<String>();
+
     for (WorkerInfo tmpWorkerInfo : myDependencyWorkerSet) {
       if (!workerIdSet.add(tmpWorkerInfo.getHostnameId())) {
         throw new IllegalStateException(

@@ -1341,7 +1341,7 @@ public class GiraphConfiguration extends Configuration
     return METIS_PARTITIONING.get(this);
   }
 
-  public boolean isMeTISOld(){
-    return METIS_OLD.get(this);
+  public boolean isUndirectedGraph() {
+    return UNDIRECTED_GRAPH.get(this);
   }
 }
