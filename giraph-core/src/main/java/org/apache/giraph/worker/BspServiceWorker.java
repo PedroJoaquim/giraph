@@ -27,6 +27,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
+import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.iharder.Base64;
 
 import org.apache.giraph.bsp.ApplicationState;
@@ -62,6 +63,7 @@ import org.apache.giraph.io.superstep_output.SuperstepOutput;
 import org.apache.giraph.mapping.translate.TranslateEdge;
 import org.apache.giraph.master.MasterInfo;
 import org.apache.giraph.master.SuperstepClasses;
+import org.apache.giraph.metis.METISPartitionBalancer;
 import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.giraph.metrics.GiraphTimer;
 import org.apache.giraph.metrics.GiraphTimerContext;
@@ -174,6 +176,9 @@ public class BspServiceWorker<I extends WritableComparable,
   /** Checkpoint Handler*/
   private WorkerCheckpointHandler workerCheckpointHandler;
 
+  /**Metis PArtition Rebalancer*/
+  private METISPartitionBalancer<I, V, E> metisPartitionBalancer;
+
   /**
    * Constructor for setting up the worker.
    *
@@ -243,6 +248,8 @@ public class BspServiceWorker<I extends WritableComparable,
 
     workerCheckpointHandler = getCheckpointHandler().
             createWorkerCheckpointHandler(this, this, getCheckpointPathManager());
+
+    metisPartitionBalancer = getConfiguration().createMETISPartitionBalancer();
   }
 
   @Override
@@ -645,9 +652,9 @@ else[HADOOP_NON_SECURE]*/
 
     if(getConfiguration().isMETISPartitioning()){
 
-      if(getConfiguration().isGreedyMetisPartitioning()){
+      if(this.metisPartitionBalancer != null){
         long start1 = System.currentTimeMillis();
-        reassignVerticesWithinPartitionsMetisGreedy();
+        this.metisPartitionBalancer.reassignPartitions(this);
         long end1 = System.currentTimeMillis();
       }
 
@@ -677,10 +684,6 @@ else[HADOOP_NON_SECURE]*/
 
 
     return finishSuperstep(partitionStatsList, null);
-  }
-
-  private void reassignVerticesWithinPartitionsMetisGreedy() {
-    //TODO
   }
 
   private void doMetisPartitioning() {

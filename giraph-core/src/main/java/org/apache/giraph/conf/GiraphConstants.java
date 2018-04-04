@@ -75,6 +75,7 @@ import org.apache.giraph.mapping.translate.TranslateEdge;
 import org.apache.giraph.master.DefaultMasterCompute;
 import org.apache.giraph.master.MasterCompute;
 import org.apache.giraph.master.MasterObserver;
+import org.apache.giraph.metis.METISPartitionBalancer;
 import org.apache.giraph.ooc.persistence.OutOfCoreDataAccessor;
 import org.apache.giraph.ooc.persistence.LocalDiskDataAccessor;
 import org.apache.giraph.ooc.policy.MemoryEstimatorOracle;
@@ -221,6 +222,10 @@ public interface GiraphConstants {
   ClassConfOption<CheckpointHandler> CHECKPOINT_HANDLER_CLASS =
           ClassConfOption.create("giraph.checkpointHandler", DefaultCheckpointHandler.class,
                   CheckpointHandler.class, "Classes for Checkpoint Handler - optional");
+  /** Classes for Metis Partition Balancer - optional */
+  ClassConfOption<METISPartitionBalancer> METIS_PARTITION_BALANCER_CLASS =
+          ClassConfOption.create("giraph.metisPartitionBalancer",null,
+                  METISPartitionBalancer.class, "Classes for METIS partition balancer - optional");
   /** Classes for Checkpoint Handler - optional */
   ClassConfOption<VertexCheckpointWriter> VERTEX_CHECKPOINT_WRITER_CLASS =
           ClassConfOption.create("giraph.worker.vertexCheckpointWriter", null,
@@ -1316,10 +1321,6 @@ public interface GiraphConstants {
   BooleanConfOption METIS_OLD =
           new BooleanConfOption("giraph.metisOld", true,
                   "METIS OLD");
-
-  BooleanConfOption METIS_GREEDY_PARTITIONING =
-          new BooleanConfOption("giraph.metisGreedy", false,
-                  "METIS GREEDY PARTITIONING");
 
 }
 // CHECKSTYLE: resume InterfaceIsTypeCheck

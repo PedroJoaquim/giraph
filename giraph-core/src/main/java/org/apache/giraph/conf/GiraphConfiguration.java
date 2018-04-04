@@ -49,6 +49,7 @@ import org.apache.giraph.job.GiraphJobObserver;
 import org.apache.giraph.job.GiraphJobRetryChecker;
 import org.apache.giraph.master.MasterCompute;
 import org.apache.giraph.master.MasterObserver;
+import org.apache.giraph.metis.METISPartitionBalancer;
 import org.apache.giraph.partition.GraphPartitionerFactory;
 import org.apache.giraph.partition.Partition;
 import org.apache.giraph.partition.ReusesObjectsPartition;
@@ -710,6 +711,15 @@ public class GiraphConfiguration extends Configuration
   }
 
   /**
+   * Get CheckpointHandler class set in configuration.
+   *
+   * @return CheckpointHandler class
+   */
+  public Class<? extends METISPartitionBalancer> getMETISPartitionBalancer() {
+    return METIS_PARTITION_BALANCER_CLASS.get(this);
+  }
+
+  /**
    * Get VertexCheckpointWriter class set in configuration.
    *
    * @return VertexCheckpointWriter class
@@ -1329,10 +1339,6 @@ public class GiraphConfiguration extends Configuration
 
   public boolean isMETISPartitioning() {
     return METIS_PARTITIONING.get(this);
-  }
-
-  public boolean isGreedyMetisPartitioning() {
-    return METIS_GREEDY_PARTITIONING.get(this);
   }
 
   public boolean isMeTISOld(){

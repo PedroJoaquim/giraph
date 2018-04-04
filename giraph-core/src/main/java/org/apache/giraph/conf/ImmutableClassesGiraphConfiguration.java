@@ -67,6 +67,7 @@ import org.apache.giraph.mapping.translate.TranslateEdge;
 import org.apache.giraph.master.MasterCompute;
 import org.apache.giraph.master.MasterObserver;
 import org.apache.giraph.master.SuperstepClasses;
+import org.apache.giraph.metis.METISPartitionBalancer;
 import org.apache.giraph.partition.GraphPartitionerFactory;
 import org.apache.giraph.partition.Partition;
 import org.apache.giraph.utils.ExtendedByteArrayDataInput;
@@ -788,6 +789,20 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
 
     Class<? extends CheckpointHandler> checkpointHandlerClass = getCheckpointHandlerClass();
     return ReflectionUtils.newInstance(checkpointHandlerClass, this);
+  }
+
+  /**
+   * Create checkpoint handler
+   *
+   * @return Instantiated class of METISPartitionBalancer.
+   */
+  public METISPartitionBalancer<I, V, E> createMETISPartitionBalancer() {
+
+    Class<? extends METISPartitionBalancer> metisPartitionBalancer = getMETISPartitionBalancer();
+
+    if(metisPartitionBalancer == null) return null;
+
+    return ReflectionUtils.newInstance(metisPartitionBalancer, this);
   }
 
   /**
