@@ -1337,10 +1337,6 @@ public class GiraphConfiguration extends Configuration
     VERTEX_ASSIGNMENT_FILE_PATH.set(this, path);
   }
 
-  public boolean isMETISPartitioning() {
-    return METIS_PARTITIONING.get(this);
-  }
-
   public boolean isUndirectedGraph() {
     return UNDIRECTED_GRAPH.get(this);
   }

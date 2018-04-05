@@ -22,6 +22,7 @@ import org.apache.giraph.bsp.CentralizedServiceWorker;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.primitives.IntEdgeStore;
 import org.apache.giraph.edge.primitives.LongEdgeStore;
+import org.apache.giraph.edge.primitives.MetisLongEdgeStore;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
@@ -58,10 +59,19 @@ public class InMemoryEdgeStoreFactory<I extends WritableComparable,
           (ImmutableClassesGiraphConfiguration<IntWritable, V, E>) conf,
           progressable);
     } else if (vertexIdClass.equals(LongWritable.class)) {
-      edgeStore = (EdgeStore<I, V, E>) new LongEdgeStore<>(
-          (CentralizedServiceWorker<LongWritable, V, E>) service,
-          (ImmutableClassesGiraphConfiguration<LongWritable, V, E>) conf,
-          progressable);
+
+      if(conf.isMETISPartitioning()){
+        edgeStore = (EdgeStore<I, V, E>) new MetisLongEdgeStore<>(
+                (CentralizedServiceWorker<LongWritable, V, E>) service,
+                (ImmutableClassesGiraphConfiguration<LongWritable, V, E>) conf,
+                progressable);
+      }
+      else {
+        edgeStore = (EdgeStore<I, V, E>) new LongEdgeStore<>(
+                (CentralizedServiceWorker<LongWritable, V, E>) service,
+                (ImmutableClassesGiraphConfiguration<LongWritable, V, E>) conf,
+                progressable);
+      }
     } else {
       edgeStore = new SimpleEdgeStore<>(service, conf, progressable);
     }

@@ -1313,14 +1313,14 @@ public interface GiraphConstants {
           "giraph.vertexAssignmentFile", "_bsp/_vertexMapping/",
           "file that describes the assignment between vertex and partitions");
 
+  BooleanConfOption UNDIRECTED_GRAPH =
+          new BooleanConfOption("giraph.undirectedGraph", false,
+                  "Undirected input graph");
 
   BooleanConfOption METIS_PARTITIONING =
           new BooleanConfOption("giraph.metisPartitioning", false,
-                  "METIS partitioning");
+                  "do metis partitioning");
 
-  BooleanConfOption UNDIRECTED_GRAPH =
-          new BooleanConfOption("giraph.undirectedGraph", true,
-                  "Undirected input graph");
 
 
 

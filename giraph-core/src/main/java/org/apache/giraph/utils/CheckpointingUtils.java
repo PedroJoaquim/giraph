@@ -114,7 +114,11 @@ public class CheckpointingUtils {
   }
 
   public static  String getPartitionInfoPath(ImmutableClassesGiraphConfiguration configuration) {
-   return "_bsp/_partitionInfo" + configuration.getJobId() + "/";
+   return "_bsp/_partition_info_" + configuration.getJobId() + "/";
+  }
+
+  public static  String getPartitionInfoPathUndirected(ImmutableClassesGiraphConfiguration configuration) {
+    return "_bsp/_partition_info_undirected_" + configuration.getJobId() + "/";
   }
 
   public static <E extends Writable, V extends Writable, I extends WritableComparable> String getMetisInputFileName(ImmutableClassesGiraphConfiguration<I, V, E> configuration) {

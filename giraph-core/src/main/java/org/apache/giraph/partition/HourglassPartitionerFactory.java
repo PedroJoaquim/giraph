@@ -1,28 +1,21 @@
 package org.apache.giraph.partition;
 
-import com.google.common.base.Charsets;
-import it.unimi.dsi.fastutil.ints.Int2IntMap;
-import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import org.apache.giraph.bsp.BspService;
 import org.apache.giraph.conf.GiraphConstants;
-import org.apache.giraph.graph.Vertex;
-import org.apache.giraph.metis.GreedyMetisPartitionBalancer;
 import org.apache.giraph.utils.CallableFactory;
-import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.giraph.utils.ProgressableUtils;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
-
 import java.io.*;
 import java.util.Arrays;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.regex.Pattern;
+
 
 public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
         extends GraphPartitionerFactory<LongWritable, V, E> {
@@ -32,14 +25,22 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
     private Long2IntMap vertexToPartitionMapping;
 
-    public HourglassPartitionerFactory(BspService<LongWritable, V, E> service) {
+    private boolean greedyMetisPartitioning;
+
+    public HourglassPartitionerFactory() {
+        this.greedyMetisPartitioning = false;
+    }
+
+    public void greedyPartitioningDone(BspService<LongWritable, V, E> service){
+
         long start = System.currentTimeMillis();
         readVertexToPartitionMapping(service);
         long end = System.currentTimeMillis();
 
+        this.greedyMetisPartitioning = true;
+
         LOG.info("debug-metis: time to read vertex mapping from hdfs = " + (end -start)/1000.0d + " secs");
     }
-
 
     private void readVertexToPartitionMapping(BspService<LongWritable, V, E> service) {
 
@@ -121,11 +122,26 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
     @Override
     public int getPartition(LongWritable id, int partitionCount, int workerCount) {
-        return this.vertexToPartitionMapping.get(id.get());
+
+        if(greedyMetisPartitioning){
+            return this.vertexToPartitionMapping.get(id.get());
+        }
+        else {
+            return Math.abs(id.hashCode() % partitionCount);
+        }
     }
 
+    //give workers contiguous partitions
     @Override
     public int getWorker(int partition, int partitionCount, int workerCount) {
-        return -1; //not used
+
+        if(getConf().isUndirectedGraph() && getConf().isMETISPartitioning()){
+            int avgNumberPartitionsPerWork = partitionCount / workerCount;
+
+            return Math.min(partition / avgNumberPartitionsPerWork, workerCount - 1);
+        }
+        else {
+            return partition % workerCount;
+        }
     }
 }

@@ -74,11 +74,6 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
         writeMappingToHDFS(newPartitionList, serviceWorker);
     }
 
-    @Override
-    public GraphPartitionerFactory<LongWritable, V, E> getGraphPartitionerFactory(BspService<LongWritable, V , E> service) {
-        return new HourglassPartitionerFactory<>(service);
-    }
-
     private void writeMappingToHDFS(List<Partition<LongWritable, V, E>> newPartitions, final BspServiceWorker<LongWritable, V, E> serviceWorker) {
 
         int numThreads = Math.min(

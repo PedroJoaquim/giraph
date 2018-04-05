@@ -1,7 +1,5 @@
 package org.apache.giraph.metis;
 
-import org.apache.giraph.bsp.BspService;
-import org.apache.giraph.partition.GraphPartitionerFactory;
 import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
@@ -11,5 +9,4 @@ public abstract class METISPartitionBalancer<I extends WritableComparable,
 
     public abstract void reassignPartitions(BspServiceWorker<I, V, E> serviceWorker);
 
-    public abstract GraphPartitionerFactory<I, V, E> getGraphPartitionerFactory(BspService<I, V , E> service);
 }

@@ -69,6 +69,7 @@ import org.apache.giraph.master.MasterObserver;
 import org.apache.giraph.master.SuperstepClasses;
 import org.apache.giraph.metis.METISPartitionBalancer;
 import org.apache.giraph.partition.GraphPartitionerFactory;
+import org.apache.giraph.partition.HourglassPartitionerFactory;
 import org.apache.giraph.partition.Partition;
 import org.apache.giraph.utils.ExtendedByteArrayDataInput;
 import org.apache.giraph.utils.ExtendedByteArrayDataOutput;
@@ -251,6 +252,11 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
     return ReflectionUtils.newInstance(klass, this);
   }
 
+  public boolean isMETISPartitioning() {
+    return METIS_PARTITIONING.get(this);
+  }
+
+
   @Override
   public boolean hasVertexInputFormat() {
     return classes.hasVertexInputFormat();
@@ -266,6 +272,8 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
   getVertexInputFormatClass() {
     return classes.getVertexInputFormatClass();
   }
+
+
 
   /**
    * Create a user vertex input format class.

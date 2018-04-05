@@ -18,16 +18,16 @@
 
 package org.apache.giraph.worker;
 
-import java.io.DataOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.ints.Int2LongMap;
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
+import it.unimi.dsi.fastutil.objects.ObjectIterator;
 import net.iharder.Base64;
 
 import org.apache.giraph.bsp.ApplicationState;
@@ -49,6 +49,8 @@ import org.apache.giraph.comm.requests.PartitionStatsRequest;
 import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.Edge;
+import org.apache.giraph.edge.primitives.LongEdgeStore;
+import org.apache.giraph.edge.primitives.MetisLongEdgeStore;
 import org.apache.giraph.graph.AddressesAndPartitionsWritable;
 import org.apache.giraph.graph.FinishedSuperstepStats;
 import org.apache.giraph.graph.GlobalStats;
@@ -680,33 +682,209 @@ else[HADOOP_NON_SECURE]*/
     if(this.metisPartitionBalancer != null){
 
       long start1 = System.currentTimeMillis();
-      this.metisPartitionBalancer.reassignPartitions(this);
+      this.metisPartitionBalancer.reassignPartitions(this); //try send this to edge store
       long end1 = System.currentTimeMillis();
 
       LOG.info("debug-metis: worker metis rebalancing time = " + ((end1-start1)/1000.0d) + " secs");
     }
 
-
     try {
 
+      long start = System.currentTimeMillis();
       //write partition info to hdfs
-      writeMETISPartitionInfo();
+      if(getConfiguration().isUndirectedGraph()){
+        writeMETISPartitionInfoUndirected();
+      }
+      else {
+        writeMETISPartitionInfo();
+      }
+      long end = System.currentTimeMillis();
+
+      LOG.info("debug-metis: worker time to write partition Info = " + (end-start)/1000.0d + " secs");
+
 
       //signal work done and wait master to finish
       markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster();
 
       if(this.metisPartitionBalancer != null){
-        this.workerGraphPartitioner =
-                this.metisPartitionBalancer.getGraphPartitionerFactory(this).createWorkerGraphPartitioner();
+
+        if(this.workerGraphPartitioner instanceof HourglassPartitionerFactory){
+          ((HourglassPartitionerFactory) this.workerGraphPartitioner).greedyPartitioningDone(this);
+        }
+        else {
+          throw new RuntimeException("ERROR: NOT HourglassPartitionerFactory FOR METIS");
+        }
       }
 
       //send partitions across workers - see  workerGraphPartitioner.updatePartitionOwners(...)
+      start = System.currentTimeMillis();
       readMetisPartitionsFromMasterAndExchange();
+      end = System.currentTimeMillis();
 
+      LOG.info("debug-metis: worker time to  read partition Info and excahnge data= " + (end-start)/1000.0d + " secs");
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
 
+  }
+
+  private void writeMETISPartitionInfoUndirected() throws IOException {
+
+    final int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
+
+    int numThreads = Math.min(
+            GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
+            numPartitions);
+
+    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
+
+    partitionStore.startIteration();
+
+    final StringBuilder[] sbArray = new StringBuilder[partitionStore.getNumPartitions()];
+
+    CallableFactory<Long[]> callableFactory = new CallableFactory<Long[]>() {
+      @Override
+      public Callable<Long[]> newCallable(int callableId) {
+        return new Callable<Long[]>() {
+
+          @Override
+          public Long[] call() {
+
+            long randomEdgeCut = 0;
+            long metisNumEdges = 0;
+
+            MetisLongEdgeStore store = (MetisLongEdgeStore) getServerData().getEdgeStore();
+
+            while (true) {
+
+              Partition<I, V, E> partition =
+                      partitionStore.getNextPartition();
+
+              if (partition == null) {
+                break;
+              }
+
+              int partitionId = partition.getId();
+
+              Int2LongOpenHashMap edgesFromPartition = store.getEdgesFromPartition(partitionId);
+
+              partitionStore.putPartition(partition);
+
+              StringBuilder currentSB = new StringBuilder();
+
+              ObjectIterator<Int2LongMap.Entry> entryObjectIterator = edgesFromPartition.int2LongEntrySet().fastIterator();
+
+              while (entryObjectIterator.hasNext()) {
+
+                Int2LongMap.Entry next = entryObjectIterator.next();
+
+                int targetPartition = next.getIntKey();
+                long numEdges = next.getLongValue();
+
+                if (numEdges > 0 && targetPartition != partitionId) {
+
+                  currentSB.append(targetPartition + 1).append(" ").append(numEdges).append(" ");
+                  metisNumEdges++;
+
+                  if (!partitionStore.hasPartition(targetPartition)) {
+                    randomEdgeCut += numEdges;
+                  }
+                }
+              }
+
+              if (currentSB.length() > 0) {
+                currentSB.setLength(currentSB.length() - 1);
+                if (partitionId != numPartitions - 1) {
+                  currentSB.append("\n");
+                }
+              }
+
+              sbArray[partitionId] = currentSB;
+
+            }
+
+            return new Long[]{randomEdgeCut, metisNumEdges};
+          }
+        };
+      }
+    };
+
+    List<Long[]> resultThreads = ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+            "metis-write-%d", getContext());
+
+    long totalRandomEdgeCut = 0;
+    long totalNumEdgesMetis = 0;
+
+    for (Long[] info : resultThreads) {
+      totalRandomEdgeCut += info[0];
+      totalNumEdgesMetis += info[1];
+    }
+
+    Path path = new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + getWorkerInfo().getTaskId() + ".info");
+
+    OutputStream os = getFs().create(path);
+    BufferedWriter br = new BufferedWriter( new OutputStreamWriter( os, "UTF-8" ) );
+
+    for (StringBuilder sb : sbArray) {
+      br.write(sb.toString());
+    }
+
+    br.close();
+
+    Path pathUndirected = new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + getWorkerInfo().getTaskId() + ".info");
+
+    FSDataOutputStream fileOutputStream = getFs().create(pathUndirected);
+    fileOutputStream.writeLong(totalRandomEdgeCut);
+    fileOutputStream.writeLong(totalNumEdgesMetis);
+    fileOutputStream.close();
+  }
+
+  private void writeMETISPartitionInfo() throws IOException {
+
+    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
+
+    partitionStore.startIteration();
+
+    Path path = new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + getWorkerInfo().getTaskId() + ".info");
+
+    final FSDataOutputStream fileStream = getFs().create(path);
+    fileStream.writeInt(partitionStore.getNumPartitions());
+
+    MetisLongEdgeStore store = (MetisLongEdgeStore) getServerData().getEdgeStore();
+
+    for (Integer partitionId : partitionStore.getPartitionIds()) {
+
+      fileStream.writeInt(partitionId);
+
+      Int2LongOpenHashMap edgesFromPartition = store.getEdgesFromPartition(partitionId);
+
+      ObjectIterator<Int2LongMap.Entry> entryObjectIterator = edgesFromPartition.int2LongEntrySet().fastIterator();
+
+      long totalEdgeCut = 0;
+
+      while (entryObjectIterator.hasNext()) {
+
+        Int2LongMap.Entry next = entryObjectIterator.next();
+
+        int targetPartitionId = next.getIntKey();
+        long numEdges = next.getValue();
+
+        if(targetPartitionId != partitionId && numEdges > 0) {
+
+          fileStream.writeInt(targetPartitionId);
+          fileStream.writeLong(numEdges);
+
+          if(!partitionStore.hasPartition(targetPartitionId)){
+            totalEdgeCut += numEdges;
+          }
+        }
+      }
+
+      fileStream.writeInt(-1);
+      fileStream.writeLong(totalEdgeCut);
+    }
+
+    fileStream.close();
   }
 
   private void readMetisPartitionsFromMasterAndExchange() {
@@ -719,88 +897,6 @@ else[HADOOP_NON_SECURE]*/
     masterInfo = addressesAndPartitions.getMasterInfo();
 
     exchangeVertexPartitions(addressesAndPartitions.getPartitionOwners());
-  }
-
-  private void writeMETISPartitionInfo() throws IOException {
-
-    final int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
-
-    int numThreads = Math.min(
-            GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
-            numPartitions);
-
-    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
-
-    partitionStore.startIteration();
-
-    Path path = new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + getWorkerInfo().getTaskId() + ".info");
-
-    final FSDataOutputStream fileStream = getFs().create(path);
-    fileStream.writeInt(partitionStore.getNumPartitions());
-
-    CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
-      @Override
-      public Callable<Void> newCallable(int callableId) {
-        return new Callable<Void>() {
-
-          @Override
-          public Void call() throws IOException {
-            while (true) {
-
-              long totalEdgeCut = 0;
-
-              Partition<I, V, E> partition =
-                      partitionStore.getNextPartition();
-
-              if (partition == null) {
-                break;
-              }
-
-              int partitionId = partition.getId();
-
-              long[] targetPartitionInfo = new long[numPartitions];
-
-              for (Vertex<I, V, E> vertex : partition) {
-                for (Edge<I, E> edge : vertex.getEdges()) {
-
-                  int targetPartition = workerGraphPartitioner.getPartitionOwner(edge.getTargetVertexId()).getPartitionId();
-
-                  targetPartitionInfo[targetPartition]++;
-                }
-              }
-
-              partitionStore.putPartition(partition);
-
-              synchronized (fileStream){
-
-                fileStream.writeInt(partitionId);
-
-                for (int i = 0; i < numPartitions; i++) {
-                  if(targetPartitionInfo[i] > 0 && i != partitionId){
-                    fileStream.writeInt(i);
-                    fileStream.writeLong(targetPartitionInfo[i]);
-                    if(!partitionStore.hasPartition(i)){
-                      totalEdgeCut += targetPartitionInfo[i];
-                    }
-                  }
-                }
-
-                fileStream.writeInt(-1);
-                fileStream.writeLong(totalEdgeCut);
-              }
-
-            }
-
-            return null;
-          }
-        };
-      }
-    };
-
-    ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
-            "metis-write-%d", getContext());
-
-    fileStream.close();
   }
 
 
