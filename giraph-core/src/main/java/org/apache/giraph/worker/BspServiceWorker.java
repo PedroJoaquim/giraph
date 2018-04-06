@@ -98,6 +98,8 @@ import org.json.JSONObject;
 
 import com.google.common.collect.Lists;
 
+import static org.apache.giraph.conf.GiraphConstants.USER_PARTITION_COUNT;
+
 /**
  * ZooKeeper-based implementation of {@link CentralizedServiceWorker}.
  *
@@ -740,6 +742,16 @@ else[HADOOP_NON_SECURE]*/
 
     partitionStore.startIteration();
 
+    int workerCount = getWorkerInfoList().size();
+
+    int partitionCount = USER_PARTITION_COUNT.get(getConfiguration());
+
+    int avgNumberPartitionsPerWork = partitionCount / workerCount;
+
+    int myWorkTask = getWorkerInfo().getTaskId() - 1;
+
+    final int minPartitionId = myWorkTask * avgNumberPartitionsPerWork;
+
     final StringBuilder[] sbArray = new StringBuilder[partitionStore.getNumPartitions()];
 
     CallableFactory<Long[]> callableFactory = new CallableFactory<Long[]>() {
@@ -765,7 +777,7 @@ else[HADOOP_NON_SECURE]*/
               }
 
               int partitionId = partition.getId();
-
+              
               Int2LongOpenHashMap edgesFromPartition = store.getEdgesFromPartition(partitionId);
 
               partitionStore.putPartition(partition);
@@ -799,7 +811,7 @@ else[HADOOP_NON_SECURE]*/
                 }
               }
 
-              sbArray[partitionId] = currentSB;
+              sbArray[partitionId - minPartitionId] = currentSB;
 
             }
 
@@ -831,7 +843,7 @@ else[HADOOP_NON_SECURE]*/
 
     br.close();
 
-    Path pathUndirected = new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + getWorkerInfo().getTaskId() + ".info");
+    Path pathUndirected = new Path(CheckpointingUtils.getPartitionInfoPathUndirected(getConfiguration()) + getWorkerInfo().getTaskId() + ".info");
 
     FSDataOutputStream fileOutputStream = getFs().create(pathUndirected);
     fileOutputStream.writeLong(totalRandomEdgeCut);
@@ -842,8 +854,6 @@ else[HADOOP_NON_SECURE]*/
   private void writeMETISPartitionInfo() throws IOException {
 
     final PartitionStore<I, V, E> partitionStore = getPartitionStore();
-
-    partitionStore.startIteration();
 
     Path path = new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + getWorkerInfo().getTaskId() + ".info");
 
@@ -883,6 +893,8 @@ else[HADOOP_NON_SECURE]*/
       fileStream.writeInt(-1);
       fileStream.writeLong(totalEdgeCut);
     }
+
+    store.reset();
 
     fileStream.close();
   }

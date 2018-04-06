@@ -82,4 +82,12 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
     public Int2LongOpenHashMap getEdgesFromPartition(int from){
         return this.outgoingEdgesInfo.get(from);
     }
+
+    public int numPartitions(){
+        return this.outgoingEdgesInfo.size();
+    }
+
+    public void reset(){
+        this.outgoingEdgesInfo = null;
+    }
 }
