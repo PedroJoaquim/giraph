@@ -752,6 +752,9 @@ else[HADOOP_NON_SECURE]*/
 
     final int minPartitionId = myWorkTask * avgNumberPartitionsPerWork;
 
+    LOG.info("debug-metis: num partitions = " + partitionCount);
+    LOG.info("debug-metis: minPartitionId = " + minPartitionId);
+
     final StringBuilder[] sbArray = new StringBuilder[partitionStore.getNumPartitions()];
 
     CallableFactory<Long[]> callableFactory = new CallableFactory<Long[]>() {
@@ -775,6 +778,8 @@ else[HADOOP_NON_SECURE]*/
               if (partition == null) {
                 break;
               }
+
+              LOG.info("debug-metis: got partition id = " + partition.getId());
 
               int partitionId = partition.getId();
               

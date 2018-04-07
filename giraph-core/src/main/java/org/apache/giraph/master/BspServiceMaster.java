@@ -1292,7 +1292,7 @@ public class BspServiceMaster<I extends WritableComparable,
         ProcessBuilder builder = new ProcessBuilder("cat", sbMergeCommand.toString());
         builder.redirectOutput(new File(targetMetisInputFile));
         builder.redirectError(new File("/tmp/error.txt"));
-        
+
         try {
             long start1 = System.currentTimeMillis();
             Process p = builder.start();
