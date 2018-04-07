@@ -1259,9 +1259,9 @@ public class BspServiceMaster<I extends WritableComparable,
 
         for (int i = 1; i <= getWorkerInfoList().size(); i++) {
 
-            fileNames.add(i + 1, "/tmp/" + i + ".info");
+            fileNames.add(i + 1, "/tmp/" + getWorkerInfoList().get(i - 1).getTaskId() + ".info");
 
-            Path pathUndirected = new Path(CheckpointingUtils.getPartitionInfoPathUndirected(getConfiguration()) + i + ".info");
+            Path pathUndirected = new Path(CheckpointingUtils.getPartitionInfoPathUndirected(getConfiguration()) + getWorkerInfoList().get(i - 1).getTaskId() + ".info");
 
             try {
                 FSDataInputStream fileInputStream = getFs().open(pathUndirected);

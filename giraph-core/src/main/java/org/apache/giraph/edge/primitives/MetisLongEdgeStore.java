@@ -65,8 +65,6 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
 
             Int2LongOpenHashMap partitionMap = this.outgoingEdgesInfo.get(partitionId);
 
-            LOG.info("ADDED EDGE " + vertexIdEdgeIterator.getCurrentVertexId().get() + " -> " + edge.getTargetVertexId());
-
             if(partitionMap == null){
                 partitionMap = new Int2LongOpenHashMap();
                 partitionMap.defaultReturnValue(0);
