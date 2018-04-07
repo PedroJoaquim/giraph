@@ -94,6 +94,8 @@ public class GiraphApplicationMaster {
    */
   private static Integer minContainerId = Integer.MAX_VALUE;
 
+
+
 //TODO
   /** For status update for clients - yet to be implemented\\
    * Hostname of the container
@@ -148,6 +150,9 @@ public class GiraphApplicationMaster {
   /** whether all containers finishe */
   private volatile boolean done;
 
+  private static int currentTaskId = 1;
+
+
   /**
    * Construct the GiraphAppMaster, populate fields using env vars
    * set up by YARN framework in this execution container.
@@ -173,6 +178,10 @@ public class GiraphApplicationMaster {
     LOG.info("GiraphAM  for ContainerId " + cId + " ApplicationAttemptId " +
             aId);
     LOG.info("Yarn client user: " + giraphConf.getYarnClientUser());
+  }
+
+  private synchronized static int getNextTaskId(){
+    return currentTaskId++;
   }
 
   /**
@@ -496,6 +505,8 @@ public class GiraphApplicationMaster {
     private Container container;
     /** NM listener */
     private NMCallbackHandler containerListener;
+    /** TASK ID WHEN MASTER HAS DIFFERENT HEAP*/
+
 
     /**
      * Constructor.
@@ -571,6 +582,10 @@ public class GiraphApplicationMaster {
      * @return the BASH shell commands to launch the job.
      */
     private List<String> generateShellExecCommand() {
+      
+      int taskId = heapForMasterContainer != heapPerContainer ?
+              (container.getResource().getMemory() == heapForMasterContainer ? 0 : getNextTaskId()) :
+              (container.getId().getId() - minContainerID);
 
       return ImmutableList.of("java " +
               "-Xmx" + container.getResource().getMemory() + "M " +
@@ -581,7 +596,7 @@ public class GiraphApplicationMaster {
               appAttemptId.getApplicationId().getId() + " " +
               container.getId().getId() + " " +
               appAttemptId.getAttemptId() + " " +
-              (container.getId().getId() - minContainerID) + " " +
+              taskId + " " +
               "1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +
               "/task-" + container.getId().getId() + "-stdout.log " +
               "2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR +
