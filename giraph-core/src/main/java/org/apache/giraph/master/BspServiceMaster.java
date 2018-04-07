@@ -1251,14 +1251,17 @@ public class BspServiceMaster<I extends WritableComparable,
 
         LOG.info("debug-metis: time to download worker files = " + (end - start)/1000.0d + " secs");
 
-        String[] fileNames = new String[getWorkerInfoList().size() + 1];
+        List<String> fileNames = new ArrayList<>(getWorkerInfoList().size() + 2);
 
-        fileNames[0] = "/tmp/first.txt";
+        fileNames.add(0, "cat");
+        fileNames.add(1, "/tmp/first.txt");
 
         long[] edgeInfo = new long[2];
 
-        for (int i = 1; i < getWorkerInfoList().size(); i++) {
-            sbMergeCommand.append(" /tmp/").append(i).append(".info");
+        for (int i = 1; i <= getWorkerInfoList().size(); i++) {
+
+            fileNames.add(i + 1, "/tmp/" + i + ".info");
+
             Path pathUndirected = new Path(CheckpointingUtils.getPartitionInfoPathUndirected(getConfiguration()) + i + ".info");
 
             try {
@@ -1289,7 +1292,7 @@ public class BspServiceMaster<I extends WritableComparable,
             e.printStackTrace();
         }
 
-        ProcessBuilder builder = new ProcessBuilder("cat", sbMergeCommand.toString());
+        ProcessBuilder builder = new ProcessBuilder(fileNames);
         builder.redirectOutput(new File(targetMetisInputFile));
         builder.redirectError(new File("/tmp/error.txt"));
 
