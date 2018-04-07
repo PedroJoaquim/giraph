@@ -1251,9 +1251,9 @@ public class BspServiceMaster<I extends WritableComparable,
 
         LOG.info("debug-metis: time to download worker files = " + (end - start)/1000.0d + " secs");
 
-        StringBuilder sbMergeCommand = new StringBuilder();
+        String[] fileNames = new String[getWorkerInfoList().size() + 1];
 
-        sbMergeCommand.append("first.txt");
+        fileNames[0] = "/tmp/first.txt";
 
         long[] edgeInfo = new long[2];
 
