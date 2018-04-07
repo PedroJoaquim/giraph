@@ -117,6 +117,8 @@ public class GiraphApplicationMaster {
   private final int containersToLaunch;
   /** MB of JVM heap per Giraph task container */
   private final int heapPerContainer;
+  /** MB of JVM heap per Giraph master task container */
+  private final int heapForMasterContainer;
   /** Giraph configuration for this job, transported here by YARN framework */
   private final ImmutableClassesGiraphConfiguration giraphConf;
   /** Yarn configuration for this job*/
@@ -167,6 +169,7 @@ public class GiraphApplicationMaster {
     containersToLaunch = giraphConf.getMaxWorkers() + 1;
     executor = Executors.newFixedThreadPool(containersToLaunch);
     heapPerContainer = giraphConf.getYarnTaskHeapMb();
+    heapForMasterContainer = giraphConf.getYarnMasterTaskHeapMb();
     LOG.info("GiraphAM  for ContainerId " + cId + " ApplicationAttemptId " +
             aId);
     LOG.info("Yarn client user: " + giraphConf.getYarnClientUser());
@@ -259,7 +262,7 @@ public class GiraphApplicationMaster {
     // Keep looping until all the containers are launched and shell script
     // executed on them ( regardless of success/failure).
     for (int i = 0; i < containersToLaunch; ++i) {
-      ContainerRequest containerAsk = setupContainerAskForRM();
+      ContainerRequest containerAsk = setupContainerAskForRM(i == 0 ? heapForMasterContainer : heapPerContainer);
       amRMClient.addContainerRequest(containerAsk);
     }
   }
@@ -268,8 +271,9 @@ public class GiraphApplicationMaster {
    * Setup the request that will be sent to the RM for the container ask.
    *
    * @return the setup ResourceRequest to be sent to RM
+   * @param heapForContainer
    */
-  private ContainerRequest setupContainerAskForRM() {
+  private ContainerRequest setupContainerAskForRM(int containerMemoryCapacity) {
     // setup requirements for hosts
     // using * as any host will do for the distributed shell app
     // set the priority for the request
@@ -280,7 +284,7 @@ public class GiraphApplicationMaster {
     // Set up resource type requirements
     // For now, only memory is supported so we set memory requirements
     Resource capability = Records.newRecord(Resource.class);
-    capability.setMemory(heapPerContainer);
+    capability.setMemory(containerMemoryCapacity);
 
     ContainerRequest request = new ContainerRequest(capability, null, null,
             pri);
@@ -569,8 +573,8 @@ public class GiraphApplicationMaster {
     private List<String> generateShellExecCommand() {
 
       return ImmutableList.of("java " +
-              "-Xmx" + heapPerContainer + "M " +
-              "-Xms" + heapPerContainer + "M " +
+              "-Xmx" + container.getResource().getMemory() + "M " +
+              "-Xms" + container.getResource().getMemory() + "M " +
               "-cp .:${CLASSPATH} " +
               "org.apache.giraph.yarn.GiraphYarnTask " +
               appAttemptId.getApplicationId().getClusterTimestamp() + " " +

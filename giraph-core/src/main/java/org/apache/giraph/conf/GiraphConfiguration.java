@@ -795,6 +795,16 @@ public class GiraphConfiguration extends Configuration
   }
 
   /**
+   * Get heap size (in MB) for master task in our Giraph job run,
+   * assuming this job will run on the "pure YARN" profile.
+   *
+   * @return the heap size for all tasks, in MB
+   */
+  public int getYarnMasterTaskHeapMb() {
+    return GIRAPH_YARN_MASTER_TASK_HEAP_MB.get(this);
+  }
+
+  /**
    * Set heap size for Giraph tasks in our job run, assuming
    * the job will run on the "pure YARN" profile.
    *

@@ -390,6 +390,11 @@ public interface GiraphConstants {
   IntConfOption GIRAPH_YARN_TASK_HEAP_MB = new IntConfOption(
           "giraph.yarn.task.heap.mb", GIRAPH_YARN_TASK_HEAP_MB_DEFAULT,
           "Name of Giraph property for user-configurable heap memory per worker");
+
+  IntConfOption GIRAPH_YARN_MASTER_TASK_HEAP_MB = new IntConfOption(
+          "giraph.yarn.master.task.heap.mb", GIRAPH_YARN_TASK_HEAP_MB_DEFAULT,
+          "Name of Giraph property for user-configurable heap memory for master");
+
   /** Default priority level in YARN for our task containers */
   int GIRAPH_YARN_PRIORITY = 10;
   /** Is this a pure YARN job (i.e. no MapReduce layer managing Giraph tasks) */
@@ -1320,6 +1325,8 @@ public interface GiraphConstants {
   BooleanConfOption METIS_PARTITIONING =
           new BooleanConfOption("giraph.metisPartitioning", false,
                   "do metis partitioning");
+
+
 
 
 

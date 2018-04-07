@@ -1277,6 +1277,8 @@ public class BspServiceMaster<I extends WritableComparable,
 
         }
 
+        LOG.info("debug-metis: random edge cut = " + edgeInfo[0]/2);
+
         String firstLine = USER_PARTITION_COUNT.get(getConfiguration()) + " " + edgeInfo[1]/2 + " 001";
 
         try {
