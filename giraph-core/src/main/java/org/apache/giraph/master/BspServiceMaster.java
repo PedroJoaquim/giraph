@@ -1220,7 +1220,7 @@ public class BspServiceMaster<I extends WritableComparable,
             public Callable<Void> newCallable(int callableId) {
                 return new Callable<Void>() {
                     @Override
-                    public Void call() {
+                    public Void call() throws IOException {
 
                         while (!fsQueue.isEmpty()) {
 
@@ -1229,12 +1229,11 @@ public class BspServiceMaster<I extends WritableComparable,
                             if (targetFile == null) {
                                 break;
                             }
-
                             Path targetPartitionInfoPath = targetFile.getPath();
 
-                            execProcess("hdfs dfs -get " +
-                                            CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + targetPartitionInfoPath.getName() + " /tmp/"
-                                    , true, true, "master-get-hdfs");
+                            fs.copyToLocalFile(true,
+                                    new Path(CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + targetPartitionInfoPath.getName()),
+                                    new Path("/tmp/" + targetPartitionInfoPath.getName()));
 
                         }
 
