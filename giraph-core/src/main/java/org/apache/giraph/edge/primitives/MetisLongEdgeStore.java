@@ -8,9 +8,11 @@ import org.apache.giraph.edge.Edge;
 import org.apache.giraph.edge.OutEdges;
 import org.apache.giraph.utils.VertexIdEdgeIterator;
 import org.apache.giraph.utils.VertexIdEdges;
+import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.util.Progressable;
+import org.apache.log4j.Logger;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -22,6 +24,8 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
 
     private CentralizedServiceWorker<LongWritable, V, E> service;
 
+    /** Class logger */
+    private static final Logger LOG = Logger.getLogger(MetisLongEdgeStore.class);
     /**
      * Constructor.
      *
@@ -47,15 +51,21 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
 
         VertexIdEdgeIterator<LongWritable, E> vertexIdEdgeIterator =
                 edges.getVertexIdEdgeIterator();
+
         while (vertexIdEdgeIterator.hasNext()) {
+
             vertexIdEdgeIterator.next();
+
             Edge<LongWritable, E> edge = reuseEdgeObjects ?
                     vertexIdEdgeIterator.getCurrentEdge() :
                     vertexIdEdgeIterator.releaseCurrentEdge();
+
             OutEdges<LongWritable, E> outEdges = getVertexOutEdges(vertexIdEdgeIterator,
                     partitionEdges);
 
             Int2LongOpenHashMap partitionMap = this.outgoingEdgesInfo.get(partitionId);
+
+            LOG.info("ADDED EDGE " + vertexIdEdgeIterator.getCurrentVertexId().get() + " -> " + edge.getTargetVertexId());
 
             if(partitionMap == null){
                 partitionMap = new Int2LongOpenHashMap();
