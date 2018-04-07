@@ -629,6 +629,8 @@ else[HADOOP_NON_SECURE]*/
 
     markCurrentWorkerDoneReadingThenWaitForOthers();
 
+    int minAssignedPartitionId = Integer.MAX_VALUE;
+
     // Create remaining partitions owned by this worker.
     for (PartitionOwner partitionOwner : masterSetPartitionOwners) {
       if (partitionOwner.getWorkerInfo().equals(getWorkerInfo()) &&
@@ -637,7 +639,12 @@ else[HADOOP_NON_SECURE]*/
         Partition<I, V, E> partition =
                 getConfiguration().createPartition(
                         partitionOwner.getPartitionId(), getContext());
+
         getPartitionStore().addPartition(partition);
+
+        if(partitionOwner.getPartitionId() < minAssignedPartitionId){
+          minAssignedPartitionId = partitionOwner.getPartitionId();
+        }
       }
     }
 
@@ -652,7 +659,7 @@ else[HADOOP_NON_SECURE]*/
     if(getConfiguration().isMETISPartitioning()){
 
       long start1 = System.currentTimeMillis();
-      doMetisPartitioning();
+      doMetisPartitioning(minAssignedPartitionId);
       long end2 = System.currentTimeMillis();
 
       LOG.info("debug-metis: full worker metis time = " + ((end2-start1)/1000.0d) + " secs");
@@ -679,7 +686,7 @@ else[HADOOP_NON_SECURE]*/
     return finishSuperstep(partitionStatsList, null);
   }
 
-  private void doMetisPartitioning() {
+  private void doMetisPartitioning(int minAssignedPartitionId) {
 
     if(this.metisPartitionBalancer != null){
 
@@ -695,7 +702,7 @@ else[HADOOP_NON_SECURE]*/
       long start = System.currentTimeMillis();
       //write partition info to hdfs
       if(getConfiguration().isUndirectedGraph()){
-        writeMETISPartitionInfoUndirected();
+        writeMETISPartitionInfoUndirected(minAssignedPartitionId);
       }
       else {
         writeMETISPartitionInfo();
@@ -730,7 +737,7 @@ else[HADOOP_NON_SECURE]*/
 
   }
 
-  private void writeMETISPartitionInfoUndirected() throws IOException {
+  private void writeMETISPartitionInfoUndirected(final int minPartitionId) throws IOException {
 
     final int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
 
@@ -741,19 +748,6 @@ else[HADOOP_NON_SECURE]*/
     final PartitionStore<I, V, E> partitionStore = getPartitionStore();
 
     partitionStore.startIteration();
-
-    int workerCount = getWorkerInfoList().size();
-
-    int partitionCount = USER_PARTITION_COUNT.get(getConfiguration());
-
-    int avgNumberPartitionsPerWork = partitionCount / workerCount;
-
-    int myWorkTask = getWorkerInfo().getTaskId() - 1;
-
-    final int minPartitionId = myWorkTask * avgNumberPartitionsPerWork;
-
-    LOG.info("debug-metis: num partitions = " + partitionCount);
-    LOG.info("debug-metis: minPartitionId = " + minPartitionId);
 
     final StringBuilder[] sbArray = new StringBuilder[partitionStore.getNumPartitions()];
 
@@ -778,8 +772,6 @@ else[HADOOP_NON_SECURE]*/
               if (partition == null) {
                 break;
               }
-
-              LOG.info("debug-metis: got partition id = " + partition.getId());
 
               int partitionId = partition.getId();
               
