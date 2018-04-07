@@ -1234,7 +1234,7 @@ public class BspServiceMaster<I extends WritableComparable,
 
                             execProcess("hdfs dfs -get " +
                                             CheckpointingUtils.getPartitionInfoPath(getConfiguration()) + targetPartitionInfoPath.getName() + " /tmp/"
-                                        , true, true, "master-get-hdfs");
+                                    , true, true, "master-get-hdfs");
 
                         }
 
@@ -1253,9 +1253,9 @@ public class BspServiceMaster<I extends WritableComparable,
 
         StringBuilder sbMergeCommand = new StringBuilder();
 
-        sbMergeCommand.append("cat first.txt");
+        sbMergeCommand.append("first.txt");
 
-       long[] edgeInfo = new long[2];
+        long[] edgeInfo = new long[2];
 
         for (int i = 1; i < getWorkerInfoList().size(); i++) {
             sbMergeCommand.append(" /tmp/").append(i).append(".info");
@@ -1275,25 +1275,35 @@ public class BspServiceMaster<I extends WritableComparable,
 
         }
 
+        String firstLine = USER_PARTITION_COUNT.get(getConfiguration()) + " " + edgeInfo[1]/2 + " 001";
 
-        String cmd1 = "echo '" + USER_PARTITION_COUNT.get(getConfiguration()) + " " + edgeInfo[1]/2 + " 001' > /tmp/first.txt";
+        try {
+            Path path = new Path("/tmp/first.txt");
+            OutputStream os = getFs().create(path);
+            BufferedWriter br = new BufferedWriter( new OutputStreamWriter( os, "UTF-8" ) );
 
-        LOG.info("debug-metis: cmd1 = "+ cmd1);
+            br.write(firstLine + "\n");
 
-        execProcess(cmd1,
-                true, true, "write-metis-problem-un");
+            br.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
-        sbMergeCommand.append(" > ").append(targetMetisInputFile);
-
-        String cmd2 = sbMergeCommand.toString();
-
-        LOG.info("debug-metis = cmd2 = " + cmd2);
-
-        long start1 = System.currentTimeMillis();
-        execProcess(cmd2, true, true, "write-metis-problem-un");
-        long end1 = System.currentTimeMillis();
-
-        LOG.info("debug-metis: time to write final metis file = " + (end1 - start1)/1000.0d + " secs");
+        ProcessBuilder builder = new ProcessBuilder("cat", sbMergeCommand.toString());
+        builder.redirectOutput(new File(targetMetisInputFile));
+        builder.redirectError(new File("/tmp/error.txt"));
+        
+        try {
+            long start1 = System.currentTimeMillis();
+            Process p = builder.start();
+            p.waitFor();
+            long end1 = System.currentTimeMillis();
+            LOG.info("debug-metis: time to write final metis file = " + (end1 - start1)/1000.0d + " secs");
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
     }
 
 
