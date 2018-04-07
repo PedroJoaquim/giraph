@@ -66,6 +66,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.giraph.conf.GiraphConstants.GIRAPH_YARN_TASK_HEAP_MB_DEFAULT;
+
 /**
  * The YARN Application Master for Giraph is launched when the GiraphYarnClient
  * successfully requests an execution container from the Resource Manager. The
@@ -174,7 +176,11 @@ public class GiraphApplicationMaster {
     containersToLaunch = giraphConf.getMaxWorkers() + 1;
     executor = Executors.newFixedThreadPool(containersToLaunch);
     heapPerContainer = giraphConf.getYarnTaskHeapMb();
-    heapForMasterContainer = giraphConf.getYarnMasterTaskHeapMb();
+
+    heapForMasterContainer =
+            giraphConf.getYarnMasterTaskHeapMb() == GIRAPH_YARN_TASK_HEAP_MB_DEFAULT ?
+                    heapPerContainer : giraphConf.getYarnMasterTaskHeapMb();
+
     LOG.info("GiraphAM  for ContainerId " + cId + " ApplicationAttemptId " +
             aId);
     LOG.info("Yarn client user: " + giraphConf.getYarnClientUser());
@@ -582,7 +588,7 @@ public class GiraphApplicationMaster {
      * @return the BASH shell commands to launch the job.
      */
     private List<String> generateShellExecCommand() {
-      
+
       int taskId = heapForMasterContainer != heapPerContainer ?
               (container.getResource().getMemory() == heapForMasterContainer ? 0 : getNextTaskId()) :
               (container.getId().getId() - minContainerID);
