@@ -1281,13 +1281,9 @@ public class BspServiceMaster<I extends WritableComparable,
         String firstLine = USER_PARTITION_COUNT.get(getConfiguration()) + " " + edgeInfo[1]/2 + " 001";
 
         try {
-            Path path = new Path("/tmp/first.txt");
-            OutputStream os = getFs().create(path);
-            BufferedWriter br = new BufferedWriter( new OutputStreamWriter( os, "UTF-8" ) );
-
-            br.write(firstLine + "\n");
-
-            br.close();
+            PrintWriter writer = new PrintWriter("/tmp/first.txt", "UTF-8");
+            writer.println(firstLine);
+            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
