@@ -1679,11 +1679,7 @@ else[HADOOP_NON_SECURE]*/
                           partitionId + " to send to " +
                           workerPartitionList.getKey());
         }
-        if (LOG.isInfoEnabled()) {
-          LOG.info("sendWorkerPartitions: Sending worker " +
-                  workerPartitionList.getKey() + " partition " +
-                  partitionId);
-        }
+        
         workerClientRequestProcessor.sendPartitionRequest(
                 workerPartitionList.getKey(),
                 partition);
