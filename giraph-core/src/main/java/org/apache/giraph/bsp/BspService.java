@@ -24,7 +24,10 @@ import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.graph.GraphTaskManager;
 import org.apache.giraph.job.JobProgressTracker;
+import org.apache.giraph.partition.BasicPartitionOwner;
 import org.apache.giraph.partition.GraphPartitionerFactory;
+import org.apache.giraph.partition.HourglassPartitionerFactory;
+import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.giraph.worker.WorkerInfo;
 import org.apache.giraph.zk.BspEvent;
@@ -49,9 +52,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import static org.apache.giraph.conf.GiraphConstants.RESTART_JOB_ID;
 
@@ -1010,5 +1011,37 @@ public abstract class BspService<I extends WritableComparable,
    */
   protected CheckpointPathManager getCheckpointPathManager(){
     return this.checkpointPathManager;
+  }
+
+  protected List<PartitionOwner> minimizePartitionOwners(Collection<? extends PartitionOwner> currentPartitionOwners) {
+
+    if(!(this.graphPartitionerFactory instanceof HourglassPartitionerFactory)){
+      throw new RuntimeException("INVALID PARTITION FACTORY FOR METIS PARTITIONING");
+    }
+
+    int numComputeThreads = this.conf.getNumComputeThreads();
+
+    HourglassPartitionerFactory hourglassPartitionerFactory = (HourglassPartitionerFactory) this.graphPartitionerFactory;
+
+    hourglassPartitionerFactory.metisPartitioningDone(currentPartitionOwners, numComputeThreads);
+
+    List<PartitionOwner> newPoList = new ArrayList<>();
+
+    List<WorkerInfo> workerInfoList = getWorkerInfoList();
+
+    for (WorkerInfo workerInfo : workerInfoList) {
+
+      int workerTaskId = workerInfo.getTaskId();
+
+      for (int i = 0; i < numComputeThreads; i++) {
+
+        int partitionId = (workerTaskId * numComputeThreads) + i;
+
+        LOG.info("debug-metis: added PO partition ID =  " + partitionId + " workerID = " + workerInfo.getTaskId());
+        newPoList.add(new BasicPartitionOwner(partitionId, workerInfo));
+      }
+    }
+
+    return newPoList;
   }
 }

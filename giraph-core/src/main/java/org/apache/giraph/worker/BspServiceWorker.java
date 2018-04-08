@@ -711,7 +711,6 @@ else[HADOOP_NON_SECURE]*/
 
       LOG.info("debug-metis: worker time to write partition Info = " + (end-start)/1000.0d + " secs");
 
-
       //signal work done and wait master to finish
       markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster();
 
@@ -729,13 +728,90 @@ else[HADOOP_NON_SECURE]*/
       start = System.currentTimeMillis();
       readMetisPartitionsFromMasterAndExchange();
       end = System.currentTimeMillis();
-
       LOG.info("debug-metis: worker time to  read partition Info and excahnge data= " + (end-start)/1000.0d + " secs");
+
+      long start5 = System.currentTimeMillis();
+      List<PartitionOwner> newPartitionOwners = minimizePartitionOwners(this.workerGraphPartitioner.getPartitionOwners());
+      long end5 = System.currentTimeMillis();
+      LOG.info("debug-metis: time to update partitionOwners = " + (end5 - start5)/1000.0d + " secs");
+
+      start5 = System.currentTimeMillis();
+      updateMetisPartitionOwners(newPartitionOwners);
+      end5 = System.currentTimeMillis();
+      LOG.info("debug-metis: time set new partitionOwners = " + (end5 - start5)/1000.0d + " secs");
+
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
 
   }
+
+  private void updateMetisPartitionOwners(List<PartitionOwner> newPartitionOwners) {
+
+    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
+
+    partitionStore.startIteration();
+
+    final int myWorkerId = getWorkerInfo().getTaskId();
+
+    final int numPartitionsPerWorker = getConfiguration().getNumComputeThreads();
+
+    final List<Partition<I, V, E>> newPartitions = new ArrayList<>(numPartitionsPerWorker);
+
+    for (int i = 0; i < numPartitionsPerWorker; i++) {
+      int newPartitionId = (myWorkerId * numPartitionsPerWorker) + i;
+
+      newPartitions.add(i, getConfiguration().createPartition(newPartitionId, getContext()));
+    }
+
+    int numThreads = GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration());
+
+    CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
+
+      @Override
+      public Callable<Void> newCallable(int callableId) {
+        return new Callable<Void>() {
+          @Override
+          public Void call() throws IOException {
+
+            while (true){
+
+              Partition<I, V, E> oldPartition =
+                      partitionStore.getNextPartition();
+
+              if(oldPartition == null) break;
+
+              int microPartitionID = oldPartition.getId();
+
+              int newPartitionIndex = Math.abs(microPartitionID % numPartitionsPerWorker);
+
+              Partition<I, V, E> newPartition = newPartitions.get(newPartitionIndex);
+
+              synchronized (newPartition){
+                newPartition.addPartition(oldPartition);
+              }
+
+              partitionStore.removePartition(oldPartition.getId());
+            }
+
+            return null;
+          }
+        };
+      }
+    };
+
+    ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
+            "metis-read-%d", getContext());
+
+    for (int i = 0; i < numPartitionsPerWorker; i++) {
+      LOG.info("debug-metis: WORKER " + getWorkerInfo().getTaskId() + " HAS PARTITION " + newPartitions.get(i).getId());
+      partitionStore.addPartition(newPartitions.get(i));
+    }
+
+
+    this.workerGraphPartitioner.updatePartitionOwners(getWorkerInfo(), newPartitionOwners);
+  }
+
 
   private void writeMETISPartitionInfoUndirected(final int minPartitionId) throws IOException {
 

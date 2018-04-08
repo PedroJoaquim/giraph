@@ -1170,6 +1170,14 @@ public class BspServiceMaster<I extends WritableComparable,
         //create new partition assignment
         createAndSendPartitionOwners(partitionAssignmentInfo);
 
+        long start5 = System.currentTimeMillis();
+        List<PartitionOwner> newPartitionOwners = minimizePartitionOwners(this.masterGraphPartitioner.getCurrentPartitionOwners());
+        long end5 = System.currentTimeMillis();
+
+        LOG.info("debug-metis: time to update partitionOwners = " + (end5 - start5)/1000.0d + " secs");
+
+        this.masterGraphPartitioner.setPartitionOwners(newPartitionOwners);
+
         //signal im done
         try {
             getZkExt().createExt(metisMasterDonePath,
@@ -1277,7 +1285,7 @@ public class BspServiceMaster<I extends WritableComparable,
 
         }
 
-        int numVertices =  USER_PARTITION_COUNT.get(getConfiguration());
+        long numVertices =  USER_PARTITION_COUNT.get(getConfiguration());
         long numFullEdges = numVertices * numVertices;
         long numMetisEdges =  edgeInfo[1]/2;
 

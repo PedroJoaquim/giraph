@@ -1,5 +1,7 @@
 package org.apache.giraph.partition;
 
+import it.unimi.dsi.fastutil.ints.Int2IntArrayMap;
+import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import org.apache.giraph.bsp.BspService;
@@ -12,6 +14,8 @@ import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 import java.io.*;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -27,9 +31,34 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
     private boolean greedyMetisPartitioning;
 
+    private boolean metisPartitioningDone;
+
+    private int initialNumberOfPartitions;
+
+    private Int2IntMap microPartitionToWorkerMapping;
+
+    private int numPartitionsPerWorkerAfterMetis;
+
     public HourglassPartitionerFactory() {
         this.greedyMetisPartitioning = false;
+        this.metisPartitioningDone = false;
     }
+
+    public void metisPartitioningDone(Collection<PartitionOwner> microPartitionAssignment, int numPartitionsPerWorkerAfterMetis){
+
+        this.initialNumberOfPartitions = microPartitionAssignment.size();
+
+        microPartitionToWorkerMapping = new Int2IntArrayMap(microPartitionAssignment.size());
+
+        for (PartitionOwner po : microPartitionAssignment) {
+            this.microPartitionToWorkerMapping.put(po.getPartitionId(), po.getWorkerInfo().getTaskId());
+        }
+
+        this.numPartitionsPerWorkerAfterMetis = numPartitionsPerWorkerAfterMetis;
+
+        this.metisPartitioningDone = true;
+    }
+
 
     public void greedyPartitioningDone(BspService<LongWritable, V, E> service){
 
@@ -125,6 +154,19 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
         if(greedyMetisPartitioning){
             return this.vertexToPartitionMapping.get(id.get());
+        }
+        else if(metisPartitioningDone){
+
+            int microPartitionID = Math.abs(id.hashCode() % this.initialNumberOfPartitions);
+
+            int assignedWorker = this.microPartitionToWorkerMapping.get(microPartitionID);
+
+            int newPartitionId = Math.abs(microPartitionID % this.numPartitionsPerWorkerAfterMetis);
+
+            int basePartitionForWorker = assignedWorker * numPartitionsPerWorkerAfterMetis;
+
+            return basePartitionForWorker + newPartitionId;
+
         }
         else {
             return Math.abs(id.hashCode() % partitionCount);
