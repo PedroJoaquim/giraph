@@ -779,8 +779,9 @@ else[HADOOP_NON_SECURE]*/
 
               partitionStore.putPartition(partition);
 
-              StringBuilder currentSB = new StringBuilder();
+              if(edgesFromPartition == null) continue;
 
+              StringBuilder currentSB = new StringBuilder();
 
               Int2LongMap.FastEntrySet entries = edgesFromPartition.int2LongEntrySet();
 

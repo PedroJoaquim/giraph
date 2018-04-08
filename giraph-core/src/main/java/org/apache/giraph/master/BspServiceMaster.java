@@ -1276,7 +1276,7 @@ public class BspServiceMaster<I extends WritableComparable,
             }
 
         }
-        
+
         int numVertices =  USER_PARTITION_COUNT.get(getConfiguration());
         long numFullEdges = numVertices * numVertices;
         long numMetisEdges =  edgeInfo[1]/2;
