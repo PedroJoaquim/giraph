@@ -348,13 +348,19 @@ end[PURE_YARN]*/
       } else if (storeCheckpoint(globalStats.getCheckpointStatus())) {
         break;
       }
+
+      long start = System.currentTimeMillis();
       serviceWorker.getServerData().prepareResolveMutations();
       context.progress();
       prepareForSuperstep(graphState);
       context.progress();
       MessageStore<I, Writable> messageStore =
           serviceWorker.getServerData().getCurrentMessageStore();
+      long end = System.currentTimeMillis();
 
+      LOG.info("debug-micro: step1 = " + (end -start)/1000.0d + " secs ");
+
+      start = System.currentTimeMillis();
       int numPartitions = serviceWorker.getPartitionStore().getNumPartitions();
       int numThreads = Math.min(numComputeThreads, numPartitions);
       if (LOG.isInfoEnabled()) {
@@ -363,14 +369,26 @@ end[PURE_YARN]*/
           numComputeThreads + " thread(s) on superstep " + superstep);
       }
       partitionStatsList.clear();
+      end = System.currentTimeMillis();
+
+      LOG.info("debug-micro: step2 = " + (end -start)/1000.0d + " secs ");
+
+      start = System.currentTimeMillis();
       // execute the current superstep
       if (numPartitions > 0) {
         processGraphPartitions(context, partitionStatsList, graphState,
           messageStore, numThreads);
       }
+      end = System.currentTimeMillis();
+
+      LOG.info("debug-micro: step3 = " + (end -start)/1000.0d + " secs ");
+
+      start = System.currentTimeMillis();
       finishedSuperstepStats = completeSuperstepAndCollectStats(
         partitionStatsList, superstepTimerContext);
+      end = System.currentTimeMillis();
 
+      LOG.info("debug-micro: step4 = " + (end -start)/1000.0d + " secs ");
       // END of superstep compute loop
     }
 

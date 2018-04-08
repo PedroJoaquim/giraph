@@ -218,7 +218,7 @@ public class PartitionBalancer {
         conf.get(PARTITION_BALANCE_ALGORITHM, STATIC_BALANCE_ALGORITHM);
     if (LOG.isInfoEnabled()) {
       LOG.info("balancePartitionsAcrossWorkers: Using algorithm " +
-          balanceAlgorithm);
+          balanceAlgorithm + " for " + partitionOwners.size() + " PARTITIONS");
     }
     BalanceValue balanceValue = BalanceValue.UNSET;
     if (balanceAlgorithm.equals(STATIC_BALANCE_ALGORITHM)) {
