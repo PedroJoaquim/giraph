@@ -1679,7 +1679,7 @@ else[HADOOP_NON_SECURE]*/
                           partitionId + " to send to " +
                           workerPartitionList.getKey());
         }
-        
+
         workerClientRequestProcessor.sendPartitionRequest(
                 workerPartitionList.getKey(),
                 partition);
@@ -1726,14 +1726,27 @@ else[HADOOP_NON_SECURE]*/
     // 5. Add the partitions to myself.
 
     LOG.info("debug-micro: master received partition owners on superstep " + getSuperstep());
-    for (PartitionOwner po : masterSetPartitionOwners) {
-      LOG.info("debug-micro: PO -> partition: " + po.getPartitionId() + " worker: " + po.getWorkerInfo().getTaskId());
+
+    if(masterSetPartitionOwners.size() > 100){
+      LOG.info("debug-micro: too much to print");
+    }
+    else {
+      for (PartitionOwner po : masterSetPartitionOwners) {
+        LOG.info("debug-micro: PO -> partition: " + po.getPartitionId() + " worker: " + po.getWorkerInfo().getTaskId());
+      }
     }
 
     LOG.info("debug-micro: my pos ");
-    for (PartitionOwner po : this.workerGraphPartitioner.getPartitionOwners()) {
-      LOG.info("debug-micro: PO -> partition: " + po.getPartitionId() + " worker: " + po.getWorkerInfo().getTaskId());
+
+    if(this.workerGraphPartitioner.getPartitionOwners().size() > 100){
+      LOG.info("debug-micro: too much to print");
     }
+    else{
+      for (PartitionOwner po : this.workerGraphPartitioner.getPartitionOwners()) {
+        LOG.info("debug-micro: PO -> partition: " + po.getPartitionId() + " worker: " + po.getWorkerInfo().getTaskId());
+      }
+    }
+
 
     PartitionExchange partitionExchange =
             workerGraphPartitioner.updatePartitionOwners(
