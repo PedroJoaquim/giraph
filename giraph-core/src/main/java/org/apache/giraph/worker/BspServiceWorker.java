@@ -844,7 +844,13 @@ else[HADOOP_NON_SECURE]*/
     BufferedWriter br = new BufferedWriter( new OutputStreamWriter( os, "UTF-8" ) );
 
     for (StringBuilder sb : sbArray) {
-      br.write(sb.toString());
+      if(sb == null){
+        br.write("\n");
+      }
+      else {
+        br.write(sb.toString());
+      }
+
     }
 
     br.close();
