@@ -730,15 +730,18 @@ else[HADOOP_NON_SECURE]*/
       end = System.currentTimeMillis();
       LOG.info("debug-metis: worker time to  read partition Info and excahnge data= " + (end-start)/1000.0d + " secs");
 
-      long start5 = System.currentTimeMillis();
-      List<PartitionOwner> newPartitionOwners = minimizePartitionOwners(this.workerGraphPartitioner.getPartitionOwners());
-      long end5 = System.currentTimeMillis();
-      LOG.info("debug-metis: time to update partitionOwners = " + (end5 - start5)/1000.0d + " secs");
+      if(getConfiguration().isReduceMicroPartitions()){
+        long start5 = System.currentTimeMillis();
+        List<PartitionOwner> newPartitionOwners = minimizePartitionOwners(this.workerGraphPartitioner.getPartitionOwners());
+        long end5 = System.currentTimeMillis();
+        LOG.info("debug-metis: time to update partitionOwners = " + (end5 - start5)/1000.0d + " secs");
 
-      start5 = System.currentTimeMillis();
-      updateMetisPartitionOwners(newPartitionOwners);
-      end5 = System.currentTimeMillis();
-      LOG.info("debug-metis: time set new partitionOwners = " + (end5 - start5)/1000.0d + " secs");
+        start5 = System.currentTimeMillis();
+        updateMetisPartitionOwners(newPartitionOwners);
+        end5 = System.currentTimeMillis();
+        LOG.info("debug-metis: time set new partitionOwners = " + (end5 - start5)/1000.0d + " secs");
+      }
+
 
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -804,10 +807,8 @@ else[HADOOP_NON_SECURE]*/
             "metis-read-%d", getContext());
 
     for (int i = 0; i < numPartitionsPerWorker; i++) {
-      LOG.info("debug-metis: WORKER " + getWorkerInfo().getTaskId() + " HAS PARTITION " + newPartitions.get(i).getId());
       partitionStore.addPartition(newPartitions.get(i));
     }
-
 
     this.workerGraphPartitioner.updatePartitionOwners(getWorkerInfo(), newPartitionOwners);
   }
@@ -1727,6 +1728,17 @@ else[HADOOP_NON_SECURE]*/
     // 3. Notify completion with a ZooKeeper stamp
     // 4. Wait for all my dependencies to be done (if any)
     // 5. Add the partitions to myself.
+
+    LOG.info("debug-micro: master received partition owners on superstep " + getSuperstep());
+    for (PartitionOwner po : masterSetPartitionOwners) {
+      LOG.info("debug-micro: PO -> partition: " + po.getPartitionId() + " worker: " + po.getWorkerInfo().getTaskId());
+    }
+
+    LOG.info("debug-micro: my pos ");
+    for (PartitionOwner po : this.workerGraphPartitioner.getPartitionOwners()) {
+      LOG.info("debug-micro: PO -> partition: " + po.getPartitionId() + " worker: " + po.getWorkerInfo().getTaskId());
+    }
+
     PartitionExchange partitionExchange =
             workerGraphPartitioner.updatePartitionOwners(
                     getWorkerInfo(), masterSetPartitionOwners);

@@ -1326,6 +1326,10 @@ public interface GiraphConstants {
           new BooleanConfOption("giraph.metisPartitioning", false,
                   "do metis partitioning");
 
+  BooleanConfOption REDUCE_MICRO_PARTITIONS =
+          new BooleanConfOption("giraph.reduceMicroPartitions", false,
+                  "reduce micro partitions");
+
 
 
 

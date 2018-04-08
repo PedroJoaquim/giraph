@@ -256,6 +256,10 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
     return METIS_PARTITIONING.get(this);
   }
 
+  public boolean isReduceMicroPartitions(){
+    return REDUCE_MICRO_PARTITIONS.get(this);
+  }
+
 
   @Override
   public boolean hasVertexInputFormat() {

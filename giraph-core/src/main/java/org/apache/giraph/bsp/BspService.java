@@ -1037,7 +1037,6 @@ public abstract class BspService<I extends WritableComparable,
 
         int partitionId = (workerTaskId * numComputeThreads) + i;
 
-        LOG.info("debug-metis: added PO partition ID =  " + partitionId + " workerID = " + workerInfo.getTaskId());
         newPoList.add(new BasicPartitionOwner(partitionId, workerInfo));
       }
     }
