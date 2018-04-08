@@ -1031,7 +1031,7 @@ public abstract class BspService<I extends WritableComparable,
 
     for (WorkerInfo workerInfo : workerInfoList) {
 
-      int workerTaskId = workerInfo.getTaskId();
+      int workerTaskId = workerInfo.getTaskId() - 1;
 
       for (int i = 0; i < numComputeThreads; i++) {
 

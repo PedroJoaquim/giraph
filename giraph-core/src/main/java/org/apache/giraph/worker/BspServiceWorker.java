@@ -752,7 +752,7 @@ else[HADOOP_NON_SECURE]*/
 
     partitionStore.startIteration();
 
-    final int myWorkerId = getWorkerInfo().getTaskId();
+    final int myWorkerId = getWorkerInfo().getTaskId() - 1;
 
     final int numPartitionsPerWorker = getConfiguration().getNumComputeThreads();
 

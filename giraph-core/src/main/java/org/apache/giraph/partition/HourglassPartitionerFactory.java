@@ -159,7 +159,7 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
             int microPartitionID = Math.abs(id.hashCode() % this.initialNumberOfPartitions);
 
-            int assignedWorker = this.microPartitionToWorkerMapping.get(microPartitionID);
+            int assignedWorker = this.microPartitionToWorkerMapping.get(microPartitionID) - 1;
 
             int newPartitionId = Math.abs(microPartitionID % this.numPartitionsPerWorkerAfterMetis);
 

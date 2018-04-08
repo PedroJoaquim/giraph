@@ -1760,14 +1760,14 @@ public class BspServiceMaster<I extends WritableComparable,
      * @param partitionOwners List of partition ids for current superstep
      */
     private void checkPartitions(Collection<PartitionOwner> partitionOwners) {
-       /* for (PartitionOwner partitionOwner : partitionOwners) {
+        for (PartitionOwner partitionOwner : partitionOwners) {
             int partitionId = partitionOwner.getPartitionId();
             if (partitionId < 0 || partitionId >= partitionOwners.size()) {
                 throw new IllegalStateException("checkPartitions: " +
                         "Invalid partition id " + partitionId +
                         " - partition ids must be values from 0 to (numPartitions - 1)");
             }
-        }*/
+        }
     }
 
     /**
