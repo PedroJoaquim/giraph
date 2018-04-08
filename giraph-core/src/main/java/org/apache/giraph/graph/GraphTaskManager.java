@@ -349,18 +349,13 @@ end[PURE_YARN]*/
         break;
       }
 
-      long start = System.currentTimeMillis();
       serviceWorker.getServerData().prepareResolveMutations();
       context.progress();
       prepareForSuperstep(graphState);
       context.progress();
       MessageStore<I, Writable> messageStore =
           serviceWorker.getServerData().getCurrentMessageStore();
-      long end = System.currentTimeMillis();
 
-      LOG.info("debug-micro: step1 = " + (end -start)/1000.0d + " secs ");
-
-      start = System.currentTimeMillis();
       int numPartitions = serviceWorker.getPartitionStore().getNumPartitions();
       int numThreads = Math.min(numComputeThreads, numPartitions);
       if (LOG.isInfoEnabled()) {
@@ -369,26 +364,15 @@ end[PURE_YARN]*/
           numComputeThreads + " thread(s) on superstep " + superstep);
       }
       partitionStatsList.clear();
-      end = System.currentTimeMillis();
 
-      LOG.info("debug-micro: step2 = " + (end -start)/1000.0d + " secs ");
-
-      start = System.currentTimeMillis();
       // execute the current superstep
       if (numPartitions > 0) {
         processGraphPartitions(context, partitionStatsList, graphState,
           messageStore, numThreads);
       }
-      end = System.currentTimeMillis();
 
-      LOG.info("debug-micro: step3 = " + (end -start)/1000.0d + " secs ");
-
-      start = System.currentTimeMillis();
       finishedSuperstepStats = completeSuperstepAndCollectStats(
         partitionStatsList, superstepTimerContext);
-      end = System.currentTimeMillis();
-
-      LOG.info("debug-micro: step4 = " + (end -start)/1000.0d + " secs ");
       // END of superstep compute loop
     }
 
@@ -837,9 +821,14 @@ end[PURE_YARN]*/
               serviceWorker);
         }
       };
+
+    ((BspServiceWorker) this.serviceWorker).setTimeGettingPartitionId(0);
+
     List<Collection<PartitionStats>> results =
         ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
             "compute-%d", context);
+
+    LOG.info("debug-micro: time getting partition id = " + ((BspServiceWorker) this.serviceWorker).getTimeGettingPartitionId() + " secs");
 
     for (Collection<PartitionStats> result : results) {
       partitionStatsList.addAll(result);
