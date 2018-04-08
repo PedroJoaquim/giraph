@@ -1276,10 +1276,17 @@ public class BspServiceMaster<I extends WritableComparable,
             }
 
         }
+        
+        int numVertices =  USER_PARTITION_COUNT.get(getConfiguration());
+        long numFullEdges = numVertices * numVertices;
+        long numMetisEdges =  edgeInfo[1]/2;
 
         LOG.info("debug-metis: random edge cut = " + edgeInfo[0]/2);
 
-        String firstLine = USER_PARTITION_COUNT.get(getConfiguration()) + " " + edgeInfo[1]/2 + " 001";
+        LOG.info("debug-metis: fullConnectedGraph = " + numFullEdges +
+                " numEdges = " + numMetisEdges + " (" + ((numMetisEdges*100)/numFullEdges) + "%)");
+
+        String firstLine = numVertices + " " + numMetisEdges + " 001";
 
         try {
             PrintWriter writer = new PrintWriter("/tmp/first.txt", "UTF-8");

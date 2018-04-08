@@ -751,6 +751,8 @@ else[HADOOP_NON_SECURE]*/
 
     final StringBuilder[] sbArray = new StringBuilder[partitionStore.getNumPartitions()];
 
+    final MetisLongEdgeStore store = (MetisLongEdgeStore) getServerData().getEdgeStore();
+
     CallableFactory<Long[]> callableFactory = new CallableFactory<Long[]>() {
       @Override
       public Callable<Long[]> newCallable(int callableId) {
@@ -761,8 +763,6 @@ else[HADOOP_NON_SECURE]*/
 
             long randomEdgeCut = 0;
             long metisNumEdges = 0;
-
-            MetisLongEdgeStore store = (MetisLongEdgeStore) getServerData().getEdgeStore();
 
             while (true) {
 
@@ -781,7 +781,12 @@ else[HADOOP_NON_SECURE]*/
 
               StringBuilder currentSB = new StringBuilder();
 
-              ObjectIterator<Int2LongMap.Entry> entryObjectIterator = edgesFromPartition.int2LongEntrySet().fastIterator();
+
+              Int2LongMap.FastEntrySet entries = edgesFromPartition.int2LongEntrySet();
+
+              if(entries == null) continue;
+
+              ObjectIterator<Int2LongMap.Entry> entryObjectIterator = entries.fastIterator();
 
               while (entryObjectIterator.hasNext()) {
 
@@ -820,6 +825,9 @@ else[HADOOP_NON_SECURE]*/
 
     List<Long[]> resultThreads = ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
             "metis-write-%d", getContext());
+
+
+    store.reset();
 
     long totalRandomEdgeCut = 0;
     long totalNumEdgesMetis = 0;
