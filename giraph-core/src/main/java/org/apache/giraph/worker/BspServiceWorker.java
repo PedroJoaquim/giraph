@@ -178,8 +178,6 @@ public class BspServiceWorker<I extends WritableComparable,
   /**Metis PArtition Rebalancer*/
   private METISPartitionBalancer<I, V, E> metisPartitionBalancer;
 
-  private long timeGettingPartitionId;
-
   /**
    * Constructor for setting up the worker.
    *
@@ -1867,11 +1865,7 @@ else[HADOOP_NON_SECURE]*/
 
   @Override
   public int getPartitionId(I vertexId) {
-    long start = System.currentTimeMillis();
-    PartitionOwner partitionOwner = getVertexPartitionOwner(vertexId);
-    long end = System.currentTimeMillis();
-    this.timeGettingPartitionId += (end-start);
-    return partitionOwner.getPartitionId();
+    return getVertexPartitionOwner(vertexId).getPartitionId();
   }
 
   @Override
@@ -1950,13 +1944,5 @@ else[HADOOP_NON_SECURE]*/
   public void addressesAndPartitionsReceived(
           AddressesAndPartitionsWritable addressesAndPartitions) {
     addressesAndPartitionsHolder.offer(addressesAndPartitions);
-  }
-
-  public double getTimeGettingPartitionId() {
-    return timeGettingPartitionId/1000.0d;
-  }
-
-  public void setTimeGettingPartitionId(long timeGettingPartitionId) {
-    this.timeGettingPartitionId = timeGettingPartitionId;
   }
 }

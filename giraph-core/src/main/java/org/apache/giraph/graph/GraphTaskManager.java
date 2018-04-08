@@ -822,13 +822,9 @@ end[PURE_YARN]*/
         }
       };
 
-    ((BspServiceWorker) this.serviceWorker).setTimeGettingPartitionId(0);
-
     List<Collection<PartitionStats>> results =
         ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
             "compute-%d", context);
-
-    LOG.info("debug-micro: time getting partition id = " + ((BspServiceWorker) this.serviceWorker).getTimeGettingPartitionId() + " secs");
 
     for (Collection<PartitionStats> result : results) {
       partitionStatsList.addAll(result);
