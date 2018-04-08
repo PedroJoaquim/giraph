@@ -124,7 +124,15 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
    * @return Map which holds messages for partition which vertex belongs to.
    */
   private Basic2ObjectMap<I, DataInputOutput> getPartitionMap(I vertexId) {
-    return map.get(partitionInfo.getPartitionId(vertexId));
+    int partitionId = partitionInfo.getPartitionId(vertexId);
+
+    if(!map.containsKey(partitionId)){
+      LOG.info("debug-metis: LOOKING FOR PARTITION " + partitionId + " BUT ONLY HAS : ");
+      for (Integer partition : map.keySet()) {
+        LOG.info("debug-metis: partition = " + partition);
+      }
+    }
+    return map.get(partitionId);
   }
 
   /**
