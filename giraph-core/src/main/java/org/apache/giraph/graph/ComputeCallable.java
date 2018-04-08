@@ -162,6 +162,7 @@ public class ComputeCallable<I extends WritableComparable, V extends Writable,
         (Computation<I, V, E, M1, M2>) configuration.createComputation();
     computation.initialize(graphState, workerClientRequestProcessor,
         serviceWorker, aggregatorUsage);
+
     computation.preSuperstep();
 
     List<PartitionStats> partitionStatsList = Lists.newArrayList();
@@ -293,6 +294,15 @@ public class ComputeCallable<I extends WritableComparable, V extends Writable,
         }
       }
     };
+
+    long totalTimeGetMessages = 0;
+    long totalTimeComputeVertices =0;
+    long compute1 = 0;
+    long compute2 =0;
+    long compute3 =0;
+    long compute4 = 0;
+    long compute5 = 0;
+    long clearMessages =0;
     // Make sure this is thread-safe across runs
     synchronized (partition) {
       if (ignoreExistingVertices) {
@@ -326,28 +336,60 @@ public class ComputeCallable<I extends WritableComparable, V extends Writable,
               (++count & OutOfCoreEngine.CHECK_IN_INTERVAL) == 0) {
             oocEngine.activeThreadCheckIn();
           }
+          long start = System.currentTimeMillis();
           Iterable<M1> messages =
               messageStore.getVertexMessages(vertex.getId());
+          long end = System.currentTimeMillis();
+
+          totalTimeGetMessages += (end - start);
+
           if (vertex.isHalted() && !Iterables.isEmpty(messages)) {
             vertex.wakeUp();
           }
           if (!vertex.isHalted()) {
+            start = System.currentTimeMillis();
             context.progress();
+            end = System.currentTimeMillis();
+            compute1 += (end - start);
+
+            start=System.currentTimeMillis();
             computation.compute(vertex, messages);
+            end=System.currentTimeMillis();
+            totalTimeComputeVertices += (end-start);
+
+            start = System.currentTimeMillis();
             // Need to unwrap the mutated edges (possibly)
             vertex.unwrapMutableEdges();
+            end = System.currentTimeMillis();
+            compute2 += (end-start);
+
+            start = System.currentTimeMillis();
             //Compact edges representation if possible
             if (vertex instanceof Trimmable) {
               ((Trimmable) vertex).trim();
             }
+            end = System.currentTimeMillis();
+            compute3 += (end-start);
+
+            start = System.currentTimeMillis();
             // Write vertex to superstep output (no-op if it is not used)
             vertexWriter.writeVertex(vertex);
+
+            end = System.currentTimeMillis();
+
+            compute4 += (end-start);
             // Need to save the vertex changes (possibly)
+
+            start = System.currentTimeMillis();
             partition.saveVertex(vertex);
+            end = System.currentTimeMillis();
+            compute5 += (end-start);
           }
           if (vertex.isHalted()) {
             partitionStats.incrFinishedVertexCount();
           }
+
+          start = System.currentTimeMillis();
           // Remove the messages now that the vertex has finished computation
           messageStore.clearVertexMessages(vertex.getId());
 
@@ -356,10 +398,24 @@ public class ComputeCallable<I extends WritableComparable, V extends Writable,
           partitionStats.addEdgeCount(vertex.getNumEdges());
 
           verticesProgressable.progress();
+          end = System.currentTimeMillis();
+
+          clearMessages += (end-start);
         }
       }
       messageStore.clearPartition(partition.getId());
     }
+
+    LOG.info("debug-micro: totalTimeGetMessages = " + (totalTimeGetMessages/1000.0d) + " secs");
+    LOG.info("debug-micro: totalTimeComputeVertices = " + (totalTimeComputeVertices/1000.0d) + " secs");
+    LOG.info("debug-micro: compute1 = " + (compute1/1000.0d) + " secs");
+    LOG.info("debug-micro: compute2 = " + (compute2/1000.0d) + " secs");
+    LOG.info("debug-micro: compute3 = " + (compute3/1000.0d) + " secs");
+    LOG.info("debug-micro: compute4 = " + (compute4/1000.0d) + " secs");
+    LOG.info("debug-micro: compute5 = " + (compute5/1000.0d) + " secs");
+    LOG.info("debug-micro: clearMessages = " + (clearMessages/1000.0d) + " secs");
+
+
     WorkerProgress.get().addVerticesComputed(verticesComputedProgress.value);
     WorkerProgress.get().incrementPartitionsComputed();
     return partitionStats;
