@@ -197,7 +197,7 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
 
           double timeToReadCheckpoint  = readTimeToRestartFromCheckpoint();
 
-          double timeToRunMetisPartitioner = this.bspServiceMaster.getTimeToRunMetisPartitioner() / 1000.0d;
+          double timeToRunMetisPartitioner = 0.0;
 
           long edgeCut = this.bspServiceMaster.getEdgeCut();
 

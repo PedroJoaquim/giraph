@@ -174,8 +174,6 @@ public class BspServiceMaster<I extends WritableComparable,
     private double hdfsCheckpointSecs = 0d;
     /** time to send checkpoints to s3*/
     private double s3CheckpointSecs = 0d;
-    /** time to execute the metis partitioner*/
-    private long timeToRunMetisPartitioner = 0;
 
     /**
      * Constructor for setting up the master.
@@ -614,6 +612,21 @@ public class BspServiceMaster<I extends WritableComparable,
         // If the minimum percentage is not met, fail the job.  Otherwise
         // generate the input splits
         List<WorkerInfo> healthyWorkerInfoList = checkWorkers();
+
+        if(getConfiguration().isMETISPartitioning()){
+
+            Collections.sort(healthyWorkerInfoList, new Comparator<WorkerInfo>() {
+                @Override
+                public int compare(WorkerInfo wi1, WorkerInfo wi2) {
+                    return Integer.compare(wi1.getTaskId(), wi2.getTaskId());
+                }
+            });
+
+            for (int i = 0; i < healthyWorkerInfoList.size(); i++) {
+                healthyWorkerInfoList.get(i).setWorkerIndex(i);
+            }
+        }
+
         if (healthyWorkerInfoList == null) {
             setJobStateFailed("Not enough healthy workers to create input splits");
             return -1;
@@ -1159,13 +1172,14 @@ public class BspServiceMaster<I extends WritableComparable,
             LOG.info("debug-metis: time writing problem " + (end3 - end2)/1000.0d + " secs");
         }
 
+        int[] partitionAssignmentInfo;
 
-        long end3 = System.currentTimeMillis();
-        int[] partitionAssignmentInfo = runMetisPartitioning();
-        long end4 = System.currentTimeMillis();
-
-        LOG.info("debug-metis: time running metis and read solution " + (end4 - end3)/1000.0d + " secs");
-        LOG.info("debug-metis: time running metis " + this.timeToRunMetisPartitioner/1000.0d + " secs");
+        if(!getConfiguration().getRemoteMetisHost().equals("")){
+            partitionAssignmentInfo = runMetisPartitioningRemote();
+        }
+        else {
+            partitionAssignmentInfo = runMetisPartitioning();
+        }
 
         //create new partition assignment
         createAndSendPartitionOwners(partitionAssignmentInfo);
@@ -1291,7 +1305,7 @@ public class BspServiceMaster<I extends WritableComparable,
         long numFullEdges = numVertices * numVertices;
         long numMetisEdges =  edgeInfo[1]/2;
 
-        LOG.info("debug-metis: random edge cut = " + edgeInfo[0]/2);
+        LOG.info("debug-metis-master: random edge cut = " + edgeInfo[0]/2);
 
         LOG.info("debug-metis: fullConnectedGraph = " + numFullEdges +
                 " numEdges = " + numMetisEdges + " (" + ((numMetisEdges*100)/numFullEdges) + "%)");
@@ -1356,6 +1370,75 @@ public class BspServiceMaster<I extends WritableComparable,
         }
     }
 
+    private int[] runMetisPartitioningRemote(){
+
+        int numWorkers = getWorkerInfoList().size();
+
+        String remoteHostIp = getConfiguration().getRemoteMetisHost();
+
+        String targetMetisInputFile = CheckpointingUtils.getMetisInputFileName(getConfiguration());
+
+        String targetMetisOutputFile = targetMetisInputFile + ".part." + numWorkers;
+
+        String uploadFileCommand = "scp -o StrictHostKeyChecking=no " + targetMetisInputFile + " " +
+                getConfiguration().getYarnClientUser() + "@" + remoteHostIp + ":" + targetMetisInputFile;
+
+        String metisCommand = "ssh -o StrictHostKeyChecking=no " +
+                getConfiguration().getYarnClientUser() + "@" + remoteHostIp + " " +
+                "gpmetis " + targetMetisInputFile + " " + numWorkers;
+
+        String downloadFileCommand = "scp -o StrictHostKeyChecking=no " +
+                getConfiguration().getYarnClientUser() + "@" + remoteHostIp + ":" + targetMetisOutputFile + " " +
+                targetMetisOutputFile;
+
+
+        long start = System.currentTimeMillis();
+        execProcess(uploadFileCommand, true, true, "metis-debug");
+        long end = System.currentTimeMillis();
+
+        LOG.info("debug-metis: time to upload metis file to remote host = " + (end - start)/1000.0d + " secs");
+
+        start = System.currentTimeMillis();
+        execProcess(metisCommand, true, true, "metis-debug");
+        end = System.currentTimeMillis();
+
+        LOG.info("debug-metis: time to run metis on remote host = " + (end - start)/1000.0d + " secs");
+
+        start = System.currentTimeMillis();
+        execProcess(downloadFileCommand, true, true, "metis-debug");
+        end = System.currentTimeMillis();
+
+        LOG.info("debug-metis: time to download metis file from remote host = " + (end - start)/1000.0d + " secs");
+
+        int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
+
+        int[] microPartitionAssignment = new int[numPartitions];
+
+        start = System.currentTimeMillis();
+
+        try {
+
+            Scanner sc = new Scanner(new File(targetMetisOutputFile));
+            int partitionId = 0;
+
+            while (sc.hasNextLine()) {
+                microPartitionAssignment[partitionId++] = Integer.parseInt(sc.nextLine());
+            }
+
+            sc.close();
+        }
+        catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
+        end = System.currentTimeMillis();
+
+        LOG.info("debug-metis: time to parse metis file from local host = " + (end - start)/1000.0d + " secs");
+
+        return microPartitionAssignment;
+    }
+
+
     private int[] runMetisPartitioning() {
 
         String targetMetisInputFile = CheckpointingUtils.getMetisInputFileName(getConfiguration());
@@ -1366,13 +1449,17 @@ public class BspServiceMaster<I extends WritableComparable,
 
         execProcess("gpmetis " + targetMetisInputFile + " " + numWorkers, true, true, "metis-debug");
 
-        this.timeToRunMetisPartitioner = System.currentTimeMillis() - start;
+        long end = System.currentTimeMillis();
+
+        LOG.info("debug-metis: time to run metis on local host = " + (end - start)/1000.0d + " secs");
 
         String metisOutputFile = targetMetisInputFile + ".part." + numWorkers;
 
         int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
 
         int[] microPartitionAssignment = new int[numPartitions];
+
+        start = System.currentTimeMillis();
 
         try {
 
@@ -1388,6 +1475,10 @@ public class BspServiceMaster<I extends WritableComparable,
         catch (FileNotFoundException e) {
             e.printStackTrace();
         }
+
+        end = System.currentTimeMillis();
+
+        LOG.info("debug-metis: time to parse metis file from local host = " + (end - start)/1000.0d + " secs");
 
         return microPartitionAssignment;
     }
@@ -2171,11 +2262,13 @@ public class BspServiceMaster<I extends WritableComparable,
                     return Integer.compare(wi1.getTaskId(), wi2.getTaskId());
                 }
             });
-            for (WorkerInfo workerInfo : chosenWorkerInfoList) {
+            for (int i = 0; i < chosenWorkerInfoList.size(); i++) {
+                chosenWorkerInfoList.get(i).setWorkerIndex(i);
+
                 String workerInfoHealthyPath =
                         getWorkerInfoHealthyPath(getApplicationAttempt(),
                                 getSuperstep()) + "/" +
-                                workerInfo.getHostnameId();
+                                chosenWorkerInfoList.get(i).getHostnameId();
                 if (getZkExt().exists(workerInfoHealthyPath, true) == null) {
                     LOG.warn("coordinateSuperstep: Chosen worker " +
                             workerInfoHealthyPath +
@@ -2245,7 +2338,7 @@ public class BspServiceMaster<I extends WritableComparable,
                 doMETISPartitioning();
                 long end = System.currentTimeMillis();
 
-                LOG.info("debug-metis: TOTAL TIME FOR METIS = " + (end-start)/1000.0d + " secs");
+                LOG.info("debug-metis-master: FULL MASTER METIS TIME  = " + (end-start)/1000.0d + " secs");
             }
         }
 
@@ -2699,10 +2792,6 @@ public class BspServiceMaster<I extends WritableComparable,
         int percentage = (int) gs.getLowestGraphPercentageInMemory().getValue();
         gs.getLowestGraphPercentageInMemory().setValue(
                 Math.min(percentage, globalStats.getLowestGraphPercentageInMemory()));
-    }
-
-    public long getTimeToRunMetisPartitioner() {
-        return timeToRunMetisPartitioner;
     }
 
     @Override

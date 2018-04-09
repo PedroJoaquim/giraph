@@ -27,7 +27,18 @@ public class WorkerInfo extends TaskInfo {
   /**
    * Constructor for reflection
    */
+
+  private int workerIndex;
+
   public WorkerInfo() {
+  }
+
+  public int getWorkerIndex() {
+    return workerIndex;
+  }
+
+  public void setWorkerIndex(int workerIndex) {
+    this.workerIndex = workerIndex;
   }
 
   @Override

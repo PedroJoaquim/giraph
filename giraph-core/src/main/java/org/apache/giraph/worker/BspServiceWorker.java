@@ -49,7 +49,6 @@ import org.apache.giraph.comm.requests.PartitionStatsRequest;
 import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.Edge;
-import org.apache.giraph.edge.primitives.LongEdgeStore;
 import org.apache.giraph.edge.primitives.MetisLongEdgeStore;
 import org.apache.giraph.graph.AddressesAndPartitionsWritable;
 import org.apache.giraph.graph.FinishedSuperstepStats;
@@ -65,7 +64,6 @@ import org.apache.giraph.io.superstep_output.SuperstepOutput;
 import org.apache.giraph.mapping.translate.TranslateEdge;
 import org.apache.giraph.master.MasterInfo;
 import org.apache.giraph.master.SuperstepClasses;
-import org.apache.giraph.metis.METISPartitionBalancer;
 import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.giraph.metrics.GiraphTimer;
 import org.apache.giraph.metrics.GiraphTimerContext;
@@ -175,9 +173,6 @@ public class BspServiceWorker<I extends WritableComparable,
   /** Checkpoint Handler*/
   private WorkerCheckpointHandler workerCheckpointHandler;
 
-  /**Metis PArtition Rebalancer*/
-  private METISPartitionBalancer<I, V, E> metisPartitionBalancer;
-
   /**
    * Constructor for setting up the worker.
    *
@@ -247,8 +242,6 @@ public class BspServiceWorker<I extends WritableComparable,
 
     workerCheckpointHandler = getCheckpointHandler().
             createWorkerCheckpointHandler(this, this, getCheckpointPathManager());
-
-    metisPartitionBalancer = getConfiguration().createMETISPartitionBalancer();
   }
 
   @Override
@@ -633,17 +626,22 @@ else[HADOOP_NON_SECURE]*/
 
     // Create remaining partitions owned by this worker.
     for (PartitionOwner partitionOwner : masterSetPartitionOwners) {
-      if (partitionOwner.getWorkerInfo().equals(getWorkerInfo()) &&
-              !getPartitionStore().hasPartition(
-                      partitionOwner.getPartitionId())) {
-        Partition<I, V, E> partition =
-                getConfiguration().createPartition(
-                        partitionOwner.getPartitionId(), getContext());
 
-        getPartitionStore().addPartition(partition);
+      if(partitionOwner.getWorkerInfo().equals(getWorkerInfo())){
 
-        if(partitionOwner.getPartitionId() < minAssignedPartitionId){
-          minAssignedPartitionId = partitionOwner.getPartitionId();
+        this.workerInfo.setWorkerIndex(partitionOwner.getWorkerInfo().getWorkerIndex());
+
+        if (!getPartitionStore().hasPartition(
+                partitionOwner.getPartitionId())) {
+          Partition<I, V, E> partition =
+                  getConfiguration().createPartition(
+                          partitionOwner.getPartitionId(), getContext());
+
+          getPartitionStore().addPartition(partition);
+
+          if(partitionOwner.getPartitionId() < minAssignedPartitionId){
+            minAssignedPartitionId = partitionOwner.getPartitionId();
+          }
         }
       }
     }
@@ -662,7 +660,7 @@ else[HADOOP_NON_SECURE]*/
       doMetisPartitioning(minAssignedPartitionId);
       long end2 = System.currentTimeMillis();
 
-      LOG.info("debug-metis: full worker metis time = " + ((end2-start1)/1000.0d) + " secs");
+      LOG.info("debug-metis-worker: FULL WORKER METIS TIME = " + ((end2-start1)/1000.0d) + " secs");
     }
 
     // Generate the partition stats for the input superstep and process
@@ -688,15 +686,6 @@ else[HADOOP_NON_SECURE]*/
 
   private void doMetisPartitioning(int minAssignedPartitionId) {
 
-    if(this.metisPartitionBalancer != null){
-
-      long start1 = System.currentTimeMillis();
-      this.metisPartitionBalancer.reassignPartitions(this); //try send this to edge store
-      long end1 = System.currentTimeMillis();
-
-      LOG.info("debug-metis: worker metis rebalancing time = " + ((end1-start1)/1000.0d) + " secs");
-    }
-
     try {
 
       long start = System.currentTimeMillis();
@@ -713,16 +702,6 @@ else[HADOOP_NON_SECURE]*/
 
       //signal work done and wait master to finish
       markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster();
-
-      if(this.metisPartitionBalancer != null){
-
-        if(this.workerGraphPartitioner instanceof HourglassPartitionerFactory){
-          ((HourglassPartitionerFactory) this.workerGraphPartitioner).greedyPartitioningDone(this);
-        }
-        else {
-          throw new RuntimeException("ERROR: NOT HourglassPartitionerFactory FOR METIS");
-        }
-      }
 
       //send partitions across workers - see  workerGraphPartitioner.updatePartitionOwners(...)
       start = System.currentTimeMillis();
@@ -755,14 +734,18 @@ else[HADOOP_NON_SECURE]*/
 
     partitionStore.startIteration();
 
-    final int myWorkerId = getWorkerInfo().getTaskId() - 1;
+    final int myWorkerIdx = getWorkerInfo().getWorkerIndex();
+
+    LOG.info("debug-micro: my workerIdx = " + myWorkerIdx);
 
     final int numPartitionsPerWorker = getConfiguration().getNumComputeThreads();
 
     final List<Partition<I, V, E>> newPartitions = new ArrayList<>(numPartitionsPerWorker);
 
     for (int i = 0; i < numPartitionsPerWorker; i++) {
-      int newPartitionId = (myWorkerId * numPartitionsPerWorker) + i;
+      int newPartitionId = (myWorkerIdx * numPartitionsPerWorker) + i;
+
+      LOG.info("debug-micro: creating new partition " + newPartitionId);
 
       newPartitions.add(i, getConfiguration().createPartition(newPartitionId, getContext()));
     }

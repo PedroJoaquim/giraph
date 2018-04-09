@@ -1,5 +1,6 @@
 package org.apache.giraph.metis;
 
+import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import org.apache.giraph.bsp.BspService;
 import org.apache.giraph.conf.GiraphConstants;
@@ -23,14 +24,15 @@ import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable> extends METISPartitionBalancer<LongWritable, V, E>{
+public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable>{
 
     /** Class logger */
     private static final Logger LOG = Logger.getLogger(GreedyMetisPartitionBalancer.class);
-    @Override
+
     public void reassignPartitions(BspServiceWorker<LongWritable, V, E> serviceWorker) {
 
 
+        long start = System.currentTimeMillis();
         List<Partition<LongWritable, V, E>> newPartitionList = new ArrayList<>();
 
         Long2IntOpenHashMap vertexAssignmentMap = new Long2IntOpenHashMap();
@@ -41,6 +43,9 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
                 newPartitionList.add(serviceWorker.getConfiguration().createPartition(po.getPartitionId(), serviceWorker.getContext()));
             }
         }
+        long end = System.currentTimeMillis();
+
+        LOG.info("debug-metis-greedy: TIME TO CREATE NEW PARTITIONS = " + (end - start)/1000.0d + " secs");
 
         PartitionStore<LongWritable, V, E> partitionStore = serviceWorker.getServerData().getPartitionStore();
 
@@ -48,6 +53,7 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
 
         long verticesPerPartition = 0;
 
+        start = System.currentTimeMillis();
         while (true){
 
             Partition<LongWritable, V, E> oldPartition =
@@ -65,13 +71,26 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
                  assignToPartition(vertex, vertexAssignmentMap, newPartitionList, verticesPerPartition);
             }
         }
+        end = System.currentTimeMillis();
 
+        LOG.info("debug-metis-greedy: TIME TO DO GREEDY ASSIGNMENT = " + (end - start)/1000.0d + " secs");
+
+
+        start = System.currentTimeMillis();
         for (Partition<LongWritable, V, E> newPartition : newPartitionList) {
             partitionStore.removePartition(newPartition.getId());
             partitionStore.addPartition(newPartition);
         }
+        end = System.currentTimeMillis();
 
+        LOG.info("debug-metis-greedy: TIME TO STORE NEW PARTITIONS = " + (end - start)/1000.0d + " secs");
+
+        start = System.currentTimeMillis();
         writeMappingToHDFS(newPartitionList, serviceWorker);
+        end = System.currentTimeMillis();
+
+        LOG.info("debug-metis-greedy: TIME TO STORE TO HDFS = " + (end - start)/1000.0d + " secs");
+
     }
 
     private void writeMappingToHDFS(List<Partition<LongWritable, V, E>> newPartitions, final BspServiceWorker<LongWritable, V, E> serviceWorker) {
@@ -81,11 +100,14 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
                 newPartitions.size());
 
 
-        final Queue<Partition<LongWritable, V, E>> partitionQueue =
-                new ConcurrentLinkedQueue<>(newPartitions);
+        int numWorkItems = Math.min(numThreads * 10, newPartitions.size());
 
+        final ConcurrentLinkedQueue<int[]> queue =
+                generateMETISThreadsWork(newPartitions, numWorkItems);
 
         final FileSystem fs = serviceWorker.getFs();
+
+
 
         CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
             @Override
@@ -168,5 +190,25 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
 
         partitions.get(maxAffinityIdx).putVertex(vertex);
         vertexAssignmentMap.put(vertex.getId().get(), maxAffinityIdx);
+    }
+
+    private ConcurrentLinkedQueue<int[]> generateMETISThreadsWork(List<Partition<LongWritable, V, E>> partitions, int numWorkItems) {
+
+        ConcurrentLinkedQueue<int[]> work = new ConcurrentLinkedQueue<>();
+
+        int workPerWorkItem = partitions.size() / numWorkItems;
+
+        for (int i = 0; i < numWorkItems; i++) {
+
+            if(i == numWorkItems - 1){
+                work.add(new int[]{i, (i * workPerWorkItem), partitions.size()});
+            }
+            else {
+                work.add(new int[]{i, (i * workPerWorkItem), (i * workPerWorkItem) + workPerWorkItem});
+            }
+        }
+
+        return work;
+
     }
 }

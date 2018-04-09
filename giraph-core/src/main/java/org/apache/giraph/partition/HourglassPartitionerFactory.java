@@ -48,7 +48,7 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
         microPartitionToWorkerMapping = new int[initialNumberOfPartitions];
 
         for (PartitionOwner po : microPartitionAssignment) {
-            this.microPartitionToWorkerMapping[po.getPartitionId()] = po.getWorkerInfo().getTaskId();
+            this.microPartitionToWorkerMapping[po.getPartitionId()] = po.getWorkerInfo().getWorkerIndex();
         }
 
         this.numPartitionsPerWorkerAfterMetis = numPartitionsPerWorkerAfterMetis;
@@ -156,7 +156,7 @@ public class HourglassPartitionerFactory<V extends Writable, E extends Writable>
 
             int microPartitionID = Math.abs(id.hashCode() % this.initialNumberOfPartitions);
 
-            int assignedWorker = this.microPartitionToWorkerMapping[microPartitionID] - 1;
+            int assignedWorker = this.microPartitionToWorkerMapping[microPartitionID];
 
             int newPartitionId = Math.abs(microPartitionID % this.numPartitionsPerWorkerAfterMetis);
 

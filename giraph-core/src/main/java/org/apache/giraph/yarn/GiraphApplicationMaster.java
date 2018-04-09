@@ -699,6 +699,7 @@ public class GiraphApplicationMaster {
 
     @Override
     public void onError(Throwable e) {
+        LOG.info("containerError: " + e.getMessage());
       done = true;
       amRMClient.stop();
     }

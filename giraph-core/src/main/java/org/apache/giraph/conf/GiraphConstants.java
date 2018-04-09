@@ -75,7 +75,6 @@ import org.apache.giraph.mapping.translate.TranslateEdge;
 import org.apache.giraph.master.DefaultMasterCompute;
 import org.apache.giraph.master.MasterCompute;
 import org.apache.giraph.master.MasterObserver;
-import org.apache.giraph.metis.METISPartitionBalancer;
 import org.apache.giraph.ooc.persistence.OutOfCoreDataAccessor;
 import org.apache.giraph.ooc.persistence.LocalDiskDataAccessor;
 import org.apache.giraph.ooc.policy.MemoryEstimatorOracle;
@@ -87,8 +86,6 @@ import org.apache.giraph.partition.SimplePartition;
 import org.apache.giraph.worker.DefaultWorkerContext;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
-import org.apache.giraph.checkpointing.WorkerCheckpointHandler;
-import org.apache.giraph.worker.checkpointing.DefaultWorkerCheckpointHandler;
 import org.apache.giraph.worker.checkpointing.io.VertexCheckpointWriter;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
@@ -222,10 +219,6 @@ public interface GiraphConstants {
   ClassConfOption<CheckpointHandler> CHECKPOINT_HANDLER_CLASS =
           ClassConfOption.create("giraph.checkpointHandler", DefaultCheckpointHandler.class,
                   CheckpointHandler.class, "Classes for Checkpoint Handler - optional");
-  /** Classes for Metis Partition Balancer - optional */
-  ClassConfOption<METISPartitionBalancer> METIS_PARTITION_BALANCER_CLASS =
-          ClassConfOption.create("giraph.metisPartitionBalancer",null,
-                  METISPartitionBalancer.class, "Classes for METIS partition balancer - optional");
   /** Classes for Checkpoint Handler - optional */
   ClassConfOption<VertexCheckpointWriter> VERTEX_CHECKPOINT_WRITER_CLASS =
           ClassConfOption.create("giraph.worker.vertexCheckpointWriter", null,
@@ -1330,7 +1323,10 @@ public interface GiraphConstants {
           new BooleanConfOption("giraph.reduceMicroPartitions", false,
                   "reduce micro partitions");
 
-
+    /** Name of the file in hdfs the vertices to partition assignment information */
+    StrConfOption REMOTE_METIS_HOST = new StrConfOption(
+            "giraph.metisRemoteHost", "",
+            "metis remote host to solve problem");
 
 
 
