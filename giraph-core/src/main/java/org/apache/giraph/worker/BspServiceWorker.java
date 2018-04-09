@@ -736,17 +736,13 @@ else[HADOOP_NON_SECURE]*/
 
     final int myWorkerIdx = getWorkerInfo().getWorkerIndex();
 
-    LOG.info("debug-micro: my workerIdx = " + myWorkerIdx);
-
     final int numPartitionsPerWorker = getConfiguration().getNumComputeThreads();
 
     final List<Partition<I, V, E>> newPartitions = new ArrayList<>(numPartitionsPerWorker);
 
     for (int i = 0; i < numPartitionsPerWorker; i++) {
       int newPartitionId = (myWorkerIdx * numPartitionsPerWorker) + i;
-
-      LOG.info("debug-micro: creating new partition " + newPartitionId);
-
+      
       newPartitions.add(i, getConfiguration().createPartition(newPartitionId, getContext()));
     }
 

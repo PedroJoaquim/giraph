@@ -20,6 +20,10 @@ package org.apache.giraph.worker;
 
 import org.apache.giraph.graph.TaskInfo;
 
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
 /**
  * Information about a worker that is sent to the master and other workers.
  */
@@ -44,5 +48,17 @@ public class WorkerInfo extends TaskInfo {
   @Override
   public String toString() {
     return "Worker(" + super.toString() + ")";
+  }
+
+  @Override
+  public void readFields(DataInput input) throws IOException {
+    super.readFields(input);
+    this.workerIndex = input.readInt();
+  }
+
+  @Override
+  public void write(DataOutput output) throws IOException {
+    super.write(output);
+    output.writeInt(this.workerIndex);
   }
 }
