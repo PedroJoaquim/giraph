@@ -26,7 +26,7 @@ import org.apache.giraph.graph.GraphTaskManager;
 import org.apache.giraph.job.JobProgressTracker;
 import org.apache.giraph.partition.BasicPartitionOwner;
 import org.apache.giraph.partition.GraphPartitionerFactory;
-import org.apache.giraph.partition.HourglassPartitionerFactory;
+import org.apache.giraph.partition.MicroPartitionerFactory;
 import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.giraph.worker.WorkerInfo;
@@ -1015,15 +1015,15 @@ public abstract class BspService<I extends WritableComparable,
 
   protected List<PartitionOwner> minimizePartitionOwners(Collection<? extends PartitionOwner> currentPartitionOwners) {
 
-    if(!(this.graphPartitionerFactory instanceof HourglassPartitionerFactory)){
+    if(!(this.graphPartitionerFactory instanceof MicroPartitionerFactory)){
       throw new RuntimeException("INVALID PARTITION FACTORY FOR METIS PARTITIONING");
     }
 
     int numComputeThreads = this.conf.getNumComputeThreads();
 
-    HourglassPartitionerFactory hourglassPartitionerFactory = (HourglassPartitionerFactory) this.graphPartitionerFactory;
+    MicroPartitionerFactory microPartitionerFactory = (MicroPartitionerFactory) this.graphPartitionerFactory;
 
-    hourglassPartitionerFactory.metisPartitioningDone(currentPartitionOwners, numComputeThreads);
+    microPartitionerFactory.metisPartitioningDone(currentPartitionOwners);
 
     List<PartitionOwner> newPoList = new ArrayList<>();
 

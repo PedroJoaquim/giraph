@@ -45,7 +45,7 @@ public abstract class GraphPartitionerFactory<I extends WritableComparable,
   }
 
   @Override
-  public final MasterGraphPartitioner<I, V, E> createMasterGraphPartitioner() {
+  public MasterGraphPartitioner<I, V, E> createMasterGraphPartitioner() {
     return new MasterGraphPartitionerImpl<I, V, E>(getConf()) {
       @Override
       protected int getWorkerIndex(int partition, int partitionCount,

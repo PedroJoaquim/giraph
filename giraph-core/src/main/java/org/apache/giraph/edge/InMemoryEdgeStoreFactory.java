@@ -18,11 +18,13 @@
 
 package org.apache.giraph.edge;
 
+import org.apache.giraph.bsp.BspService;
 import org.apache.giraph.bsp.CentralizedServiceWorker;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.primitives.IntEdgeStore;
 import org.apache.giraph.edge.primitives.LongEdgeStore;
 import org.apache.giraph.edge.primitives.MetisLongEdgeStore;
+import org.apache.giraph.partition.MicroPartitionerFactory;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
@@ -64,7 +66,8 @@ public class InMemoryEdgeStoreFactory<I extends WritableComparable,
         edgeStore = (EdgeStore<I, V, E>) new MetisLongEdgeStore<>(
                 (CentralizedServiceWorker<LongWritable, V, E>) service,
                 (ImmutableClassesGiraphConfiguration<LongWritable, V, E>) conf,
-                progressable);
+                progressable,
+                (MicroPartitionerFactory<V, E>) ((BspService<LongWritable, V, E>) service).getGraphPartitionerFactory());
       }
       else {
         edgeStore = (EdgeStore<I, V, E>) new LongEdgeStore<>(

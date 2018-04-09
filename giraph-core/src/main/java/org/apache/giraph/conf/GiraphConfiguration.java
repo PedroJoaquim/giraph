@@ -970,6 +970,10 @@ public class GiraphConfiguration extends Configuration
     return NUM_COMPUTE_THREADS.get(this);
   }
 
+  public int getUserPartitionCount(){
+    return USER_PARTITION_COUNT.get(this);
+  }
+
   /**
    * Set the number of input split threads
    *

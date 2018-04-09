@@ -6,6 +6,7 @@ import org.apache.giraph.bsp.CentralizedServiceWorker;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.Edge;
 import org.apache.giraph.edge.OutEdges;
+import org.apache.giraph.partition.MicroPartitionerFactory;
 import org.apache.giraph.utils.VertexIdEdgeIterator;
 import org.apache.giraph.utils.VertexIdEdges;
 import org.apache.giraph.worker.BspServiceWorker;
@@ -24,6 +25,8 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
 
     private CentralizedServiceWorker<LongWritable, V, E> service;
 
+    private MicroPartitionerFactory<V, E> microPartitionerFactory;
+
     /** Class logger */
     private static final Logger LOG = Logger.getLogger(MetisLongEdgeStore.class);
     /**
@@ -35,18 +38,20 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
      */
     public MetisLongEdgeStore(CentralizedServiceWorker<LongWritable, V, E> service,
                               ImmutableClassesGiraphConfiguration<LongWritable, V, E> configuration,
-                              Progressable progressable) {
+                              Progressable progressable,
+                              MicroPartitionerFactory<V, E> microPartitionerFactory) {
 
         super(service, configuration, progressable);
 
         this.service = service;
         this.outgoingEdgesInfo = new ConcurrentHashMap<>();
-
+        this.microPartitionerFactory = microPartitionerFactory;
     }
 
     @Override
     public void addPartitionEdges(
             int partitionId, VertexIdEdges<LongWritable, E> edges) {
+
         Map<Long, OutEdges<LongWritable, E>> partitionEdges = getPartitionEdges(partitionId);
 
         VertexIdEdgeIterator<LongWritable, E> vertexIdEdgeIterator =
@@ -63,23 +68,24 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
             OutEdges<LongWritable, E> outEdges = getVertexOutEdges(vertexIdEdgeIterator,
                     partitionEdges);
 
-            Int2LongOpenHashMap partitionMap = this.outgoingEdgesInfo.get(partitionId);
+            int microPartitionId = this.microPartitionerFactory.getMicroPartition(vertexIdEdgeIterator.getCurrentVertexId());
+
+            Int2LongOpenHashMap partitionMap = this.outgoingEdgesInfo.get(microPartitionId);
 
             if(partitionMap == null){
                 partitionMap = new Int2LongOpenHashMap();
                 partitionMap.defaultReturnValue(0);
-                if(this.outgoingEdgesInfo.putIfAbsent(partitionId, partitionMap) != null){
-                    partitionMap = this.outgoingEdgesInfo.get(partitionId);
+                if(this.outgoingEdgesInfo.putIfAbsent(microPartitionId, partitionMap) != null){
+                    partitionMap = this.outgoingEdgesInfo.get(microPartitionId);
                 }
             }
 
-            int targetPartitionId = this.service.getVertexPartitionOwner(edge.getTargetVertexId()).getPartitionId();
+            int targetMicroPartitionId = this.microPartitionerFactory.getMicroPartition(edge.getTargetVertexId());
 
             synchronized (partitionMap){
-                long previousValue = partitionMap.get(targetPartitionId);
-                partitionMap.put(targetPartitionId, (previousValue + 1));
+                long previousValue = partitionMap.get(targetMicroPartitionId);
+                partitionMap.put(targetMicroPartitionId, (previousValue + 1));
             }
-
 
             synchronized (outEdges) {
                 outEdges.add(edge);
