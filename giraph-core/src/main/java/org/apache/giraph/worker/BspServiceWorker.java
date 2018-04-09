@@ -742,7 +742,7 @@ else[HADOOP_NON_SECURE]*/
 
     for (int i = 0; i < numPartitionsPerWorker; i++) {
       int newPartitionId = (myWorkerIdx * numPartitionsPerWorker) + i;
-      
+
       newPartitions.add(i, getConfiguration().createPartition(newPartitionId, getContext()));
     }
 

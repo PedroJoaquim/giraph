@@ -109,7 +109,7 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
 
 
 
-        CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
+        /*CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
             @Override
             public Callable<Void> newCallable(int callableId) {
                 return new Callable<Void>() {
@@ -158,7 +158,7 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
         };
 
         ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
-                "metis-read-%d", serviceWorker.getContext());
+                "metis-read-%d", serviceWorker.getContext());*/
 
     }
 
