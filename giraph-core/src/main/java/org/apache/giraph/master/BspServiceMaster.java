@@ -1062,6 +1062,12 @@ public class BspServiceMaster<I extends WritableComparable,
                     masterGraphPartitioner.createInitialPartitionOwners(
                             chosenWorkerInfoList, maxWorkers);
 
+            LOG.info("debug-micro: initial partition owners: ");
+
+            for (PartitionOwner po: partitionOwners) {
+                LOG.info("debug-micro: wid = " + po.getWorkerInfo().getWorkerIndex() + " pid = " + po.getPartitionId());
+            }
+
             if (partitionOwners.isEmpty()) {
                 throw new IllegalStateException(
                         "assignAndExchangePartitions: No partition owners set");
@@ -1089,13 +1095,6 @@ public class BspServiceMaster<I extends WritableComparable,
 
             PartitionUtils.analyzePartitionStats(partitionOwners,
                     allPartitionStatsList);
-        }
-
-
-        if(getSuperstep() == 0 && getConfiguration().isMETISPartitioning()){ //TODO REMOVE
-            for (PartitionOwner po : partitionOwners) {
-                po.setPreviousWorkerInfo(null);
-            }
         }
 
         checkPartitions(masterGraphPartitioner.getCurrentPartitionOwners());

@@ -246,6 +246,8 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
                         }
                     }
 
+                    this.setPartitionOwners(initialPartitionOwners);
+
                     return initialPartitionOwners;
                 }
             }
