@@ -178,22 +178,8 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
     @Override
     public int getPartition(LongWritable id, int partitionCount, int workerCount) {
 
-        if(!getConf().isMETISPartitioning()){
-            return Math.abs(id.hashCode() % partitionCount);
-        }
-
-        if(!greedyMetisPartitioning && !metisPartitioningDone){
-
-            int microPartitionId = Math.abs(id.hashCode()) % this.numMicroPartitions;
-
-            int workerIdx = Math.min(numWorkers - 1, microPartitionId/this.numMicroPartitionsPerWorker);
-
-            return (microPartitionId % numPartitionsPerWorker) + (workerIdx * numPartitionsPerWorker);
-        }
-        else if(greedyMetisPartitioning){
-            return this.vertexToPartitionMapping.get(id.get());
-        }
-        else{
+        if(metisPartitioningDone
+                ){
             int microPartitionID = Math.abs(id.hashCode() % this.numMicroPartitions);
 
             int assignedWorker = this.microPartitionToWorkerMapping[microPartitionID];
@@ -203,6 +189,16 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
             int basePartitionForWorker = assignedWorker * this.numPartitionsPerWorker;
 
             return basePartitionForWorker + newPartitionId;
+        }
+        else if(greedyMetisPartitioning){
+            return this.vertexToPartitionMapping.get(id.get());
+        }
+        else {
+            int microPartitionId = Math.abs(id.hashCode()) % this.numMicroPartitions;
+
+            int workerIdx = Math.min(numWorkers - 1, microPartitionId/this.numMicroPartitionsPerWorker);
+
+            return (microPartitionId % numPartitionsPerWorker) + (workerIdx * numPartitionsPerWorker);
         }
     }
 
