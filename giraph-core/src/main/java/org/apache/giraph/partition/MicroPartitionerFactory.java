@@ -47,16 +47,19 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
     @Override
     public void setConf(ImmutableClassesGiraphConfiguration<LongWritable, V, E> conf) {
         super.setConf(conf);
-        this.numMicroPartitions = conf.getUserPartitionCount();
-        this.numPartitionsPerWorker = conf.getNumComputeThreads();
-        this.numWorkers = conf.getMaxWorkers();
 
-        this.workerInitialMicroPartitionAssignment = new int[numWorkers];
+        if(conf.isMETISPartitioning()){
+            this.numMicroPartitions = conf.getUserPartitionCount();
+            this.numPartitionsPerWorker = conf.getNumComputeThreads();
+            this.numWorkers = conf.getMaxWorkers();
 
-        int numMicroPerWorker = this.numMicroPartitions / this.numWorkers;
+            this.workerInitialMicroPartitionAssignment = new int[numWorkers];
 
-        for (int i = 0; i < numWorkers; i++) {
-            this.workerInitialMicroPartitionAssignment[i] = i * numMicroPerWorker;
+            int numMicroPerWorker = this.numMicroPartitions / this.numWorkers;
+
+            for (int i = 0; i < numWorkers; i++) {
+                this.workerInitialMicroPartitionAssignment[i] = i * numMicroPerWorker;
+            }
         }
     }
 
@@ -171,6 +174,10 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
 
     @Override
     public int getPartition(LongWritable id, int partitionCount, int workerCount) {
+
+        if(!getConf().isMETISPartitioning()){
+            return Math.abs(id.hashCode() % partitionCount);
+        }
 
         if(!greedyMetisPartitioning && !metisPartitioningDone){
 
