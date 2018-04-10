@@ -258,11 +258,6 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
     return REMOTE_METIS_HOST.get(this);
   }
 
-  public boolean isReduceMicroPartitions(){
-    return REDUCE_MICRO_PARTITIONS.get(this);
-  }
-
-
   @Override
   public boolean hasVertexInputFormat() {
     return classes.hasVertexInputFormat();

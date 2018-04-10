@@ -70,7 +70,9 @@ else[HADOOP_NON_SECURE]*/
   /** Send addresses and partitions assignments from master to workers */
   ADDRESSES_AND_PARTITIONS_REQUEST(AddressesAndPartitionsRequest.class),
   /** Send partition stats from worker to master */
-  PARTITION_STATS_REQUEST(PartitionStatsRequest.class);
+  PARTITION_STATS_REQUEST(PartitionStatsRequest.class),
+  /** send metis micro partition assignment from master to workers*/
+  METIS_MICRO_PARTITION_ASSIGNMENT_REQUEST(MetisMicroPartitionAssignmentRequest.class);
 
   /** Class of request which this type corresponds to */
   private final Class<? extends WritableRequest> requestClass;

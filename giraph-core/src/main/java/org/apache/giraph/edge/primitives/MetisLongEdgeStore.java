@@ -29,6 +29,7 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
 
     /** Class logger */
     private static final Logger LOG = Logger.getLogger(MetisLongEdgeStore.class);
+
     /**
      * Constructor.
      *

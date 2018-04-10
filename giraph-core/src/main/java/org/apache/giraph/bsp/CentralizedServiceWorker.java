@@ -31,6 +31,7 @@ import org.apache.giraph.graph.GlobalStats;
 import org.apache.giraph.graph.GraphTaskManager;
 import org.apache.giraph.graph.VertexEdgeCount;
 import org.apache.giraph.io.superstep_output.SuperstepOutput;
+import org.apache.giraph.metis.MetisMicroPartitionAssignment;
 import org.apache.giraph.metrics.GiraphTimerContext;
 import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.partition.PartitionStats;
@@ -260,4 +261,12 @@ public interface CentralizedServiceWorker<I extends WritableComparable,
    */
   void addressesAndPartitionsReceived(
       AddressesAndPartitionsWritable addressesAndPartitions);
+
+  /**
+   * Received micro partition assignments from master.
+   *
+   * @param assignment metis micro partition assignment
+   */
+  void metisMicroPartitionAssignmentReceived(
+          MetisMicroPartitionAssignment assignment);
 }

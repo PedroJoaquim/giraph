@@ -1319,10 +1319,6 @@ public interface GiraphConstants {
           new BooleanConfOption("giraph.metisPartitioning", false,
                   "do metis partitioning");
 
-  BooleanConfOption REDUCE_MICRO_PARTITIONS =
-          new BooleanConfOption("giraph.reduceMicroPartitions", false,
-                  "reduce micro partitions");
-
     /** Name of the file in hdfs the vertices to partition assignment information */
     StrConfOption REMOTE_METIS_HOST = new StrConfOption(
             "giraph.metisRemoteHost", "",

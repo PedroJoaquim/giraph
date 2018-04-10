@@ -83,9 +83,15 @@ public abstract class BspService<I extends WritableComparable,
   /** Metis partition info done directory */
   public static final String METIS_PARTITION_INFO_DONE_DIR =
           "/_metisPartitionInfoDoneDir";
+  /** Metis partition info done directory */
+  public static final String METIS_PARTITION_EXCHANGE_DONE_DIR =
+          "/_metisPartitionExchangeDoneDir";
   /** Metis Master done directory */
   public static final String METIS_MASTER_DONE_PATH =
           "/_metisMasterDoneDir";
+  /** Metis All workers done echanging done directory */
+  public static final String METIS_EXCHANGE_MASTER_DONE_PATH =
+          "/_metisExchangeMasterDoneDir";
   /** Input splits all done node*/
   public static final String INPUT_SPLITS_ALL_DONE_NODE =
           "/_inputSplitsAllDone";
@@ -148,10 +154,14 @@ public abstract class BspService<I extends WritableComparable,
   protected final String inputSplitsWorkerDonePath;
   /** Metis partition info done directory */
   protected final String metisPartitionInfoDonePath;
+  /** Metis partition exchange done directory */
+  protected final String metisPartitionExchangeDonePath;
   /** Input splits all done node */
   protected final String inputSplitsAllDonePath;
   /** master done metis partitioning node */
   protected final String metisMasterDonePath;
+  /** master done metis partitioning node */
+  protected final String metisExchangeMasterDonePath;
   /** Path to the application attempts) */
   protected final String applicationAttemptsPath;
   /** Path to the cleaned up notifications */
@@ -186,8 +196,12 @@ public abstract class BspService<I extends WritableComparable,
   private final BspEvent cleanedUpChildrenChanged;
   /** Partition Info done by workers*/
   private BspEvent metisPartitionInfoDoneEvent;
+  /** Partition Info done by workers*/
+  private BspEvent metisPartitionExchangeDoneEvent;
   /** Metis master done*/
   private BspEvent metisMasterDoneEvent;
+  /** Metis Exchange done*/
+  private BspEvent metisExchangeMasterDoneEvent;
   /** Registered list of BspEvents */
   private final List<BspEvent> registeredBspEvents =
           new ArrayList<BspEvent>();
@@ -240,6 +254,8 @@ public abstract class BspService<I extends WritableComparable,
     this.cleanedUpChildrenChanged = new PredicateLock(context);
     this.metisPartitionInfoDoneEvent = new PredicateLock(context);
     this.metisMasterDoneEvent = new PredicateLock(context);
+    this.metisPartitionExchangeDoneEvent = new PredicateLock(context);
+    this.metisExchangeMasterDoneEvent = new PredicateLock(context);
 
     registerBspEvent(connectedEvent);
     registerBspEvent(workerHealthRegistrationChanged);
@@ -251,6 +267,8 @@ public abstract class BspService<I extends WritableComparable,
     registerBspEvent(cleanedUpChildrenChanged);
     registerBspEvent(metisPartitionInfoDoneEvent);
     registerBspEvent(metisMasterDoneEvent);
+    registerBspEvent(metisPartitionExchangeDoneEvent);
+    registerBspEvent(metisExchangeMasterDoneEvent);
 
     this.context = context;
     this.graphTaskManager = graphTaskManager;
@@ -277,6 +295,8 @@ public abstract class BspService<I extends WritableComparable,
     cleanedUpPath = basePath + CLEANED_UP_DIR;
     metisPartitionInfoDonePath = basePath + METIS_PARTITION_INFO_DONE_DIR;
     metisMasterDonePath = basePath + METIS_MASTER_DONE_PATH;
+    metisPartitionExchangeDonePath = basePath + METIS_PARTITION_EXCHANGE_DONE_DIR;
+    metisExchangeMasterDonePath = basePath + METIS_EXCHANGE_MASTER_DONE_PATH;
 
     String restartJobId = RESTART_JOB_ID.get(conf);
 
@@ -592,8 +612,16 @@ public abstract class BspService<I extends WritableComparable,
     return metisPartitionInfoDoneEvent;
   }
 
+  public final BspEvent getMetisPartitionExchangeDoneEvent() {
+    return metisPartitionExchangeDoneEvent;
+  }
+
   public final BspEvent getMetisMasterDoneEvent() {
     return metisMasterDoneEvent;
+  }
+
+  public final BspEvent getMetisExchangeMasterDoneEvent() {
+    return metisExchangeMasterDoneEvent;
   }
 
   public final BspEvent getSuperstepFinishedEvent() {
@@ -949,7 +977,21 @@ public abstract class BspService<I extends WritableComparable,
       }
       metisMasterDoneEvent.signal();
       eventProcessed = true;
+    } else if (event.getPath().contains(METIS_PARTITION_EXCHANGE_DONE_DIR) &&
+            event.getType() == EventType.NodeChildrenChanged) {
+      if (LOG.isInfoEnabled()) {
+        LOG.info("process: metisPartitioneExchange signaled");
+      }
+      metisPartitionExchangeDoneEvent.signal();
+      eventProcessed = true;
+    } else if (event.getPath().contains(METIS_EXCHANGE_MASTER_DONE_PATH) &&
+          event.getType() == EventType.NodeCreated) {
+    if (LOG.isInfoEnabled()) {
+      LOG.info("process: metisExchangeMasterDone signaled");
     }
+    metisExchangeMasterDoneEvent.signal();
+    eventProcessed = true;
+  }
 
 
     if (!(processEvent(event)) && (!eventProcessed)) {
@@ -1011,36 +1053,5 @@ public abstract class BspService<I extends WritableComparable,
    */
   protected CheckpointPathManager getCheckpointPathManager(){
     return this.checkpointPathManager;
-  }
-
-  protected List<PartitionOwner> minimizePartitionOwners(Collection<? extends PartitionOwner> currentPartitionOwners) {
-
-    if(!(this.graphPartitionerFactory instanceof MicroPartitionerFactory)){
-      throw new RuntimeException("INVALID PARTITION FACTORY FOR METIS PARTITIONING");
-    }
-
-    int numComputeThreads = this.conf.getNumComputeThreads();
-
-    MicroPartitionerFactory microPartitionerFactory = (MicroPartitionerFactory) this.graphPartitionerFactory;
-
-    microPartitionerFactory.metisPartitioningDone(currentPartitionOwners);
-
-    List<PartitionOwner> newPoList = new ArrayList<>();
-
-    List<WorkerInfo> workerInfoList = getWorkerInfoList();
-
-    for (WorkerInfo workerInfo : workerInfoList) {
-
-      int workerTaskId = workerInfo.getWorkerIndex();
-
-      for (int i = 0; i < numComputeThreads; i++) {
-
-        int partitionId = (workerTaskId * numComputeThreads) + i;
-
-        newPoList.add(new BasicPartitionOwner(partitionId, workerInfo));
-      }
-    }
-
-    return newPoList;
   }
 }

@@ -23,6 +23,7 @@ import java.nio.charset.Charset;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
 import it.unimi.dsi.fastutil.ints.Int2LongMap;
@@ -64,6 +65,7 @@ import org.apache.giraph.io.superstep_output.SuperstepOutput;
 import org.apache.giraph.mapping.translate.TranslateEdge;
 import org.apache.giraph.master.MasterInfo;
 import org.apache.giraph.master.SuperstepClasses;
+import org.apache.giraph.metis.MetisMicroPartitionAssignment;
 import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.giraph.metrics.GiraphTimer;
 import org.apache.giraph.metrics.GiraphTimerContext;
@@ -95,8 +97,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import com.google.common.collect.Lists;
-
-import static org.apache.giraph.conf.GiraphConstants.USER_PARTITION_COUNT;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
  * ZooKeeper-based implementation of {@link CentralizedServiceWorker}.
@@ -143,6 +144,10 @@ public class BspServiceWorker<I extends WritableComparable,
   /** Addresses and partitions transfer */
   private BlockingElementsSet<AddressesAndPartitionsWritable>
           addressesAndPartitionsHolder = new BlockingElementsSet<>();
+
+  /** metis micro partition assignment */
+  private BlockingElementsSet<MetisMicroPartitionAssignment>
+          metisMicroPartitionAssignmentHolder = new BlockingElementsSet<>();
 
   /** Worker Context */
   private final WorkerContext workerContext;
@@ -492,7 +497,54 @@ public class BspServiceWorker<I extends WritableComparable,
                       getConfiguration()));
       getMetisMasterDoneEvent().reset();
     }
+  }
 
+  /**
+   * Mark current worker as done sending micro partitions and wait master to signal all have completed
+   */
+  public void markCurrentWorkerDoneExchangingMicroPartitionsThenWaitForMaster() {
+
+    String workerPath =
+            metisPartitionExchangeDonePath + "/" + getWorkerInfo().getHostnameId();
+
+    try {
+      getZkExt().createExt(workerPath,
+              null,
+              Ids.OPEN_ACL_UNSAFE,
+              CreateMode.PERSISTENT,
+              true);
+    } catch (KeeperException e) {
+      throw new IllegalStateException(
+              "markCurrentWorkerDoneExchangingMicroPartitionsThenWaitForMaster: " +
+                      "KeeperException creating worker done writing partition info", e);
+    } catch (InterruptedException e) {
+      throw new IllegalStateException(
+              "markCurrentWorkerDoneExchangingMicroPartitionsThenWaitForMaster: " +
+                      "InterruptedException creating worker done writing partition info", e);
+    }
+
+    while (true) {
+      Stat masterDoneStat;
+      try {
+        masterDoneStat =
+                getZkExt().exists(metisExchangeMasterDonePath, true);
+      } catch (KeeperException e) {
+        throw new IllegalStateException(
+                "markCurrentWorkerDoneThenWaitForOthers: " +
+                        "KeeperException waiting on worker done splits", e);
+      } catch (InterruptedException e) {
+        throw new IllegalStateException(
+                "markCurrentWorkerDoneThenWaitForOthers: " +
+                        "InterruptedException waiting on worker done splits", e);
+      }
+      if (masterDoneStat != null) {
+        break;
+      }
+      getMetisExchangeMasterDoneEvent().waitForTimeoutOrFail(
+              GiraphConstants.WAIT_FOR_OTHER_WORKERS_TIMEOUT_MSEC.get(
+                      getConfiguration()));
+      getMetisExchangeMasterDoneEvent().reset();
+    }
   }
 
   @Override
@@ -622,8 +674,6 @@ else[HADOOP_NON_SECURE]*/
 
     markCurrentWorkerDoneReadingThenWaitForOthers();
 
-    int minAssignedPartitionId = Integer.MAX_VALUE;
-
     // Create remaining partitions owned by this worker.
     for (PartitionOwner partitionOwner : masterSetPartitionOwners) {
 
@@ -638,10 +688,6 @@ else[HADOOP_NON_SECURE]*/
                           partitionOwner.getPartitionId(), getContext());
 
           getPartitionStore().addPartition(partition);
-
-          if(partitionOwner.getPartitionId() < minAssignedPartitionId){
-            minAssignedPartitionId = partitionOwner.getPartitionId();
-          }
         }
       }
     }
@@ -657,7 +703,7 @@ else[HADOOP_NON_SECURE]*/
     if(getConfiguration().isMETISPartitioning()){
 
       long start1 = System.currentTimeMillis();
-      doMetisPartitioning(minAssignedPartitionId);
+      doMetisPartitioning();
       long end2 = System.currentTimeMillis();
 
       LOG.info("debug-metis-worker: FULL WORKER METIS TIME = " + ((end2-start1)/1000.0d) + " secs");
@@ -684,43 +730,38 @@ else[HADOOP_NON_SECURE]*/
     return finishSuperstep(partitionStatsList, null);
   }
 
-  private void doMetisPartitioning(int minAssignedPartitionId) {
+  private void doMetisPartitioning() {
 
     try {
 
       long start = System.currentTimeMillis();
       //write partition info to hdfs
+
       if(getConfiguration().isUndirectedGraph()){
-        writeMETISPartitionInfoUndirected(minAssignedPartitionId);
+        writeMETISPartitionInfoUndirected();
       }
       else {
-        writeMETISPartitionInfo();
+        throw new NotImplementedException();
       }
+
       long end = System.currentTimeMillis();
 
       LOG.info("debug-metis: worker time to write partition Info = " + (end-start)/1000.0d + " secs");
 
+      List<Partition<I, V, E>> oldPartitions = clearPartitionStoreForMetisMicroPartitioning();
+
       //signal work done and wait master to finish
       markCurrentWorkerDoneWritingPartitionInfoThenWaitForMaster();
 
-      //send partitions across workers - see  workerGraphPartitioner.updatePartitionOwners(...)
       start = System.currentTimeMillis();
-      readMetisPartitionsFromMasterAndExchange();
+      readMetisPartitionsFromMasterAndExchange(oldPartitions);
       end = System.currentTimeMillis();
-      LOG.info("debug-metis: worker time to  read partition Info and excahnge data= " + (end-start)/1000.0d + " secs");
+      LOG.info("debug-metis: worker time to  read partition Info and exchange data= " + (end-start)/1000.0d + " secs");
 
-      if(getConfiguration().isReduceMicroPartitions()){
-        long start5 = System.currentTimeMillis();
-        List<PartitionOwner> newPartitionOwners = minimizePartitionOwners(this.workerGraphPartitioner.getPartitionOwners());
-        long end5 = System.currentTimeMillis();
-        LOG.info("debug-metis: time to update partitionOwners = " + (end5 - start5)/1000.0d + " secs");
-
-        start5 = System.currentTimeMillis();
-        updateMetisPartitionOwners(newPartitionOwners);
-        end5 = System.currentTimeMillis();
-        LOG.info("debug-metis: time set new partitionOwners = " + (end5 - start5)/1000.0d + " secs");
-      }
-
+      start = System.currentTimeMillis();
+      markCurrentWorkerDoneExchangingMicroPartitionsThenWaitForMaster();
+      end = System.currentTimeMillis();
+      LOG.info("debug-metis: worker time waiting others to finish exchanging data= " + (end-start)/1000.0d + " secs");
 
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -728,84 +769,52 @@ else[HADOOP_NON_SECURE]*/
 
   }
 
-  private void updateMetisPartitionOwners(List<PartitionOwner> newPartitionOwners) {
+  private List<Partition<I, V, E>> clearPartitionStoreForMetisMicroPartitioning() {
 
-    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
+    List<Partition<I, V, E>> oldPartitions =  new ArrayList<>();
 
-    partitionStore.startIteration();
+    PartitionStore<I, V, E> partitionStore = getServerData().getPartitionStore();
 
-    final int myWorkerIdx = getWorkerInfo().getWorkerIndex();
+    List<Integer> idsToRemove = new ArrayList<>();
 
-    final int numPartitionsPerWorker = getConfiguration().getNumComputeThreads();
-
-    final List<Partition<I, V, E>> newPartitions = new ArrayList<>(numPartitionsPerWorker);
-
-    for (int i = 0; i < numPartitionsPerWorker; i++) {
-      int newPartitionId = (myWorkerIdx * numPartitionsPerWorker) + i;
-
-      newPartitions.add(i, getConfiguration().createPartition(newPartitionId, getContext()));
+    for (Integer partitionId : partitionStore.getPartitionIds()) {
+      idsToRemove.add(partitionId);
     }
 
-    int numThreads = GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration());
-
-    CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
-
-      @Override
-      public Callable<Void> newCallable(int callableId) {
-        return new Callable<Void>() {
-          @Override
-          public Void call() throws IOException {
-
-            while (true){
-
-              Partition<I, V, E> oldPartition =
-                      partitionStore.getNextPartition();
-
-              if(oldPartition == null) break;
-
-              int microPartitionID = oldPartition.getId();
-
-              int newPartitionIndex = Math.abs(microPartitionID % numPartitionsPerWorker);
-
-              Partition<I, V, E> newPartition = newPartitions.get(newPartitionIndex);
-
-              synchronized (newPartition){
-                newPartition.addPartition(oldPartition);
-              }
-
-              partitionStore.removePartition(oldPartition.getId());
-            }
-
-            return null;
-          }
-        };
-      }
-    };
-
-    ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
-            "metis-read-%d", getContext());
-
-    for (int i = 0; i < numPartitionsPerWorker; i++) {
-      partitionStore.addPartition(newPartitions.get(i));
+    for (Integer partitionId : idsToRemove) {
+      oldPartitions.add(partitionStore.removePartition(partitionId));
+      partitionStore.addPartition(getConfiguration().createPartition(partitionId, getContext()));
     }
 
-    this.workerGraphPartitioner.updatePartitionOwners(getWorkerInfo(), newPartitionOwners);
+    return oldPartitions;
   }
 
+  private void writeMETISPartitionInfoUndirected() throws IOException {
 
-  private void writeMETISPartitionInfoUndirected(final int minPartitionId) throws IOException {
+    int myWorkerIdx = getWorkerInfo().getWorkerIndex();
 
-    final int numPartitions =  workerGraphPartitioner.getPartitionOwners().size();
+    MicroPartitionerFactory microPartitionerFactory = (MicroPartitionerFactory) getGraphPartitionerFactory();
+
+    int[] assignedMicroPartitionIdsBounds = microPartitionerFactory.getWorkerMicroPartitionIds(myWorkerIdx);
+
+    final int numAssignedMicroPartitions = (assignedMicroPartitionIdsBounds[1] - assignedMicroPartitionIdsBounds[0]) + 1;
+
+    final int minAssignedMicroPartitionId = assignedMicroPartitionIdsBounds[0];
+
+    final int maxAssignedMicroPartitionId = assignedMicroPartitionIdsBounds[1];
+
+    final int numMicroPartitions = getConfiguration().getUserPartitionCount();
 
     int numThreads = Math.min(
-            GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
-            numPartitions);
+            GiraphConstants.NUM_INPUT_THREADS.get(getConfiguration()),
+            numAssignedMicroPartitions);
 
-    final PartitionStore<I, V, E> partitionStore = getPartitionStore();
+    int numWorkItems = Math.min(numAssignedMicroPartitions, numThreads * 10);
 
-    partitionStore.startIteration();
+    final ConcurrentLinkedQueue<int[]> queue =
+            generateUndirectedInputFileWorkItems(assignedMicroPartitionIdsBounds, numAssignedMicroPartitions, numWorkItems);
 
-    final StringBuilder[] sbArray = new StringBuilder[partitionStore.getNumPartitions()];
+    final StringBuilder[] sbArray = new StringBuilder[numWorkItems];
 
     final MetisLongEdgeStore store = (MetisLongEdgeStore) getServerData().getEdgeStore();
 
@@ -820,58 +829,71 @@ else[HADOOP_NON_SECURE]*/
             long randomEdgeCut = 0;
             long metisNumEdges = 0;
 
-            while (true) {
+            while (!queue.isEmpty()) {
 
-              Partition<I, V, E> partition =
-                      partitionStore.getNextPartition();
+              int[] workItem = queue.poll();
 
-              if (partition == null) {
+              if(workItem == null){
                 break;
               }
 
-              int partitionId = partition.getId();
-              
-              Int2LongOpenHashMap edgesFromPartition = store.getEdgesFromPartition(partitionId);
+              StringBuilder workSb = new StringBuilder();
 
-              partitionStore.putPartition(partition);
+              int workIdx = workItem[0];
+              int startIdx = workItem[1];
+              int endIdx = workItem[2];
 
-              if(edgesFromPartition == null) continue;
+              for (int partitionId = startIdx; partitionId < endIdx; partitionId++) {
 
-              StringBuilder currentSB = new StringBuilder();
+                Int2LongOpenHashMap edgesFromPartition = store.getEdgesFromPartition(partitionId);
 
-              Int2LongMap.FastEntrySet entries = edgesFromPartition.int2LongEntrySet();
+                if(edgesFromPartition == null){ //no edges from partition
+                  workSb.append("\n");
+                  continue;
+                }
 
-              if(entries == null) continue;
+                Int2LongMap.FastEntrySet entries = edgesFromPartition.int2LongEntrySet();
 
-              ObjectIterator<Int2LongMap.Entry> entryObjectIterator = entries.fastIterator();
+                if(entries == null) { //no edges from partition
+                  workSb.append("\n");
+                  continue;
+                }
 
-              while (entryObjectIterator.hasNext()) {
+                ObjectIterator<Int2LongMap.Entry> entryObjectIterator = entries.fastIterator();
 
-                Int2LongMap.Entry next = entryObjectIterator.next();
+                int addedEdges = 0;
 
-                int targetPartition = next.getIntKey();
-                long numEdges = next.getLongValue();
+                while (entryObjectIterator.hasNext()) {
 
-                if (numEdges > 0 && targetPartition != partitionId) {
+                  Int2LongMap.Entry next = entryObjectIterator.next();
 
-                  currentSB.append(targetPartition + 1).append(" ").append(numEdges).append(" ");
-                  metisNumEdges++;
+                  int targetPartition = next.getIntKey();
+                  long numEdges = next.getLongValue();
 
-                  if (!partitionStore.hasPartition(targetPartition)) {
-                    randomEdgeCut += numEdges;
+                  if (numEdges > 0 && targetPartition != partitionId) {
+
+                    workSb.append(targetPartition + 1).append(" ").append(numEdges).append(" ");
+                    metisNumEdges++;
+                    addedEdges++;
+
+                    if (targetPartition > maxAssignedMicroPartitionId || targetPartition < minAssignedMicroPartitionId) {
+                      randomEdgeCut += numEdges;
+                    }
                   }
                 }
-              }
 
-              if (currentSB.length() > 0) {
-                currentSB.setLength(currentSB.length() - 1);
-                if (partitionId != numPartitions - 1) {
-                  currentSB.append("\n");
+                if(addedEdges > 0){
+                  workSb.setLength(workSb.length() -1);
                 }
+
+                workSb.append("\n");
               }
 
-              sbArray[partitionId - minPartitionId] = currentSB;
+              if(endIdx == numMicroPartitions){
+                workSb.setLength(workSb.length() -1);
+              }
 
+              sbArray[workIdx] = workSb;
             }
 
             return new Long[]{randomEdgeCut, metisNumEdges};
@@ -882,7 +904,6 @@ else[HADOOP_NON_SECURE]*/
 
     List<Long[]> resultThreads = ProgressableUtils.getResultsWithNCallables(callableFactory, numThreads,
             "metis-write-%d", getContext());
-
 
     store.reset();
 
@@ -900,13 +921,7 @@ else[HADOOP_NON_SECURE]*/
     BufferedWriter br = new BufferedWriter( new OutputStreamWriter( os, "UTF-8" ) );
 
     for (StringBuilder sb : sbArray) {
-      if(sb == null){
-        br.write("\n");
-      }
-      else {
         br.write(sb.toString());
-      }
-
     }
 
     br.close();
@@ -917,6 +932,31 @@ else[HADOOP_NON_SECURE]*/
     fileOutputStream.writeLong(totalRandomEdgeCut);
     fileOutputStream.writeLong(totalNumEdgesMetis);
     fileOutputStream.close();
+  }
+
+  private ConcurrentLinkedQueue<int[]> generateUndirectedInputFileWorkItems(int[] assignedMicroPartitionIdsBounds,
+                                                                            int numAssignedMicroPartitions,
+                                                                            int numWorkItems) {
+
+    ConcurrentLinkedQueue<int[]> work = new ConcurrentLinkedQueue<>();
+
+    int workPerWorkItem = numAssignedMicroPartitions / numWorkItems;
+
+    int minMicroPartitionIdx = assignedMicroPartitionIdsBounds[0];
+
+    int maxMicroPartitionIdx = assignedMicroPartitionIdsBounds[1];
+
+    for (int i = 0; i < numWorkItems; i++) {
+
+      if(i == numWorkItems - 1){
+        work.add(new int[]{i, (i * workPerWorkItem) + minMicroPartitionIdx, maxMicroPartitionIdx + 1});
+      }
+      else {
+        work.add(new int[]{i, (i * workPerWorkItem)  + minMicroPartitionIdx, (i * workPerWorkItem)  + minMicroPartitionIdx + workPerWorkItem});
+      }
+    }
+
+    return work;
   }
 
   private void writeMETISPartitionInfo() throws IOException {
@@ -967,16 +1007,35 @@ else[HADOOP_NON_SECURE]*/
     fileStream.close();
   }
 
-  private void readMetisPartitionsFromMasterAndExchange() {
+  private void readMetisPartitionsFromMasterAndExchange(List<Partition<I, V, E>> oldPartitions) {
 
-    AddressesAndPartitionsWritable addressesAndPartitions =
-            addressesAndPartitionsHolder.getElement(getContext());
+    MetisMicroPartitionAssignment metisMicroPartitionAssignment =
+            metisMicroPartitionAssignmentHolder.getElement(getContext());
 
-    workerInfoList.clear();
-    workerInfoList = addressesAndPartitions.getWorkerInfos();
-    masterInfo = addressesAndPartitions.getMasterInfo();
+    ((MicroPartitionerFactory) this.getGraphPartitionerFactory()).
+            metisPartitioningDone(metisMicroPartitionAssignment.getMicroPartitionToWorkerMapping());
 
-    exchangeVertexPartitions(addressesAndPartitions.getPartitionOwners());
+    WorkerClientRequestProcessor<I, V, E> workerClientRequestProcessor =
+            new NettyWorkerClientRequestProcessor<I, V, E>(getContext(),
+                    getConfiguration(), this,
+                    false /* useOneMessageToManyIdsEncoding */);
+
+
+    for (Partition<I, V, E> p : oldPartitions) {
+      for (Vertex<I, V, E> v : p) {
+        workerClientRequestProcessor.sendVertexRequest(
+                this.workerGraphPartitioner.getPartitionOwner(v.getId()), v);
+      }
+    }
+
+    try {
+      workerClientRequestProcessor.flush();
+      workerClient.waitAllRequests();
+    } catch (IOException e) {
+      throw new IllegalStateException("readMetisPartitionsFromMasterAndExchange: Flush failed", e);
+
+
+    }
   }
 
 
@@ -1923,5 +1982,11 @@ else[HADOOP_NON_SECURE]*/
   public void addressesAndPartitionsReceived(
           AddressesAndPartitionsWritable addressesAndPartitions) {
     addressesAndPartitionsHolder.offer(addressesAndPartitions);
+  }
+
+  @Override
+  public void metisMicroPartitionAssignmentReceived(
+          MetisMicroPartitionAssignment assignment) {
+    metisMicroPartitionAssignmentHolder.offer(assignment);
   }
 }

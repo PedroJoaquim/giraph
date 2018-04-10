@@ -38,6 +38,7 @@ import org.apache.giraph.comm.MasterServer;
 import org.apache.giraph.comm.netty.NettyMasterClient;
 import org.apache.giraph.comm.netty.NettyMasterServer;
 import org.apache.giraph.comm.requests.AddressesAndPartitionsRequest;
+import org.apache.giraph.comm.requests.MetisMicroPartitionAssignmentRequest;
 import org.apache.giraph.conf.GiraphConfiguration;
 import org.apache.giraph.conf.GiraphConstants;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
@@ -50,6 +51,7 @@ import org.apache.giraph.io.MappingInputFormat;
 import org.apache.giraph.io.VertexInputFormat;
 import org.apache.giraph.io.checkpoint.CheckpointInputFormat;
 import org.apache.giraph.master.input.MasterInputSplitsHandler;
+import org.apache.giraph.metis.MetisMicroPartitionAssignment;
 import org.apache.giraph.metrics.AggregatedMetrics;
 import org.apache.giraph.metrics.GiraphMetrics;
 import org.apache.giraph.metrics.GiraphTimer;
@@ -1182,9 +1184,9 @@ public class BspServiceMaster<I extends WritableComparable,
         }
 
         //create new partition assignment
-        createAndSendPartitionOwners(partitionAssignmentInfo);
+        sendMicroPartitionAssignmentToWorkers(partitionAssignmentInfo);
 
-        //signal im done
+        //signal im done doing metis partitioning
         try {
             getZkExt().createExt(metisMasterDonePath,
                     null,
@@ -1202,14 +1204,31 @@ public class BspServiceMaster<I extends WritableComparable,
                     "coordinateMetisPartitioning: IllegalStateException", e);
         }
 
-        if(getConfiguration().isReduceMicroPartitions()){
-            long start5 = System.currentTimeMillis();
-            List<PartitionOwner> newPartitionOwners = minimizePartitionOwners(this.masterGraphPartitioner.getCurrentPartitionOwners());
-            long end5 = System.currentTimeMillis();
+        //wait workers to finish exchanging micro partitions
+        if (!barrierOnWorkerList(metisPartitionExchangeDonePath,
+                chosenWorkerInfoList,
+                getMetisPartitionExchangeDoneEvent(),
+                false)) {
+            throw new IllegalStateException("doMETISPartitioning: Worker failed " +
+                    "during metis partitioning (currently not supported)");
+        }
 
-            LOG.info("debug-metis: time to update partitionOwners = " + (end5 - start5)/1000.0d + " secs");
-
-            this.masterGraphPartitioner.setPartitionOwners(newPartitionOwners);
+        //signal when all workers finished exchanging data
+        try {
+            getZkExt().createExt(metisExchangeMasterDonePath,
+                    null,
+                    Ids.OPEN_ACL_UNSAFE,
+                    CreateMode.PERSISTENT,
+                    false);
+        } catch (KeeperException.NodeExistsException e) {
+            LOG.info("coordinateMetisPartitioning: Node " +
+                    metisMasterDonePath + " already exists.");
+        } catch (KeeperException e) {
+            throw new IllegalStateException(
+                    "coordinateMetisPartitioning: KeeperException", e);
+        } catch (InterruptedException e) {
+            throw new IllegalStateException(
+                    "coordinateMetisPartitioning: IllegalStateException", e);
         }
     }
 
@@ -1339,34 +1358,14 @@ public class BspServiceMaster<I extends WritableComparable,
 
 
 
-    private void createAndSendPartitionOwners(int[] partitionAssignmentInfo) {
+    private void sendMicroPartitionAssignmentToWorkers(int[] partitionAssignmentInfo) {
 
-        List<PartitionOwner> newPartitionOwners = new ArrayList<PartitionOwner>();
-
-        for (PartitionOwner po : this.masterGraphPartitioner.getCurrentPartitionOwners()) {
-
-            int partitionId = po.getPartitionId();
-            WorkerInfo previousWorkerInfo = po.getWorkerInfo();
-            WorkerInfo currentWorkerInfo = this.chosenWorkerInfoList.get(partitionAssignmentInfo[partitionId]);
-
-            if(previousWorkerInfo.getTaskId() == currentWorkerInfo.getTaskId()){
-                newPartitionOwners.add(new BasicPartitionOwner(partitionId, currentWorkerInfo));
-            }
-            else {
-                newPartitionOwners.add(new BasicPartitionOwner(partitionId, currentWorkerInfo, previousWorkerInfo, null));
-            }
-
-        }
-
-        this.masterGraphPartitioner.setPartitionOwners(newPartitionOwners);
-
-        AddressesAndPartitionsWritable addressesAndPartitions =
-                new AddressesAndPartitionsWritable(masterInfo, chosenWorkerInfoList,
-                        newPartitionOwners);
+        MetisMicroPartitionAssignment metisMicroPartitionAssignment =
+                new MetisMicroPartitionAssignment(partitionAssignmentInfo);
 
         for (WorkerInfo workerInfo : chosenWorkerInfoList) {
             masterClient.sendWritableRequest(workerInfo.getTaskId(),
-                    new AddressesAndPartitionsRequest(addressesAndPartitions));
+                    new MetisMicroPartitionAssignmentRequest(metisMicroPartitionAssignment));
         }
     }
 
