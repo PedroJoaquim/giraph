@@ -1400,7 +1400,7 @@ public class BspServiceMaster<I extends WritableComparable,
 
         LOG.info("debug-metis: time to download metis file from remote host = " + (end - start)/1000.0d + " secs");
 
-        int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
+        int numPartitions = getConfiguration().getUserPartitionCount();
 
         int[] microPartitionAssignment = new int[numPartitions];
 
