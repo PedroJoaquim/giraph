@@ -184,7 +184,7 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
 
             int assignedWorker = this.microPartitionToWorkerMapping[microPartitionID];
 
-            int newPartitionId = Math.abs(microPartitionID % this.numPartitionsPerWorker);
+            int newPartitionId = microPartitionID % this.numPartitionsPerWorker;
 
             int basePartitionForWorker = assignedWorker * this.numPartitionsPerWorker;
 
