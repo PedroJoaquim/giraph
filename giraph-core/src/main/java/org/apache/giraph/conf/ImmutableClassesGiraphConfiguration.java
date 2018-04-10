@@ -254,6 +254,17 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
     return METIS_PARTITIONING.get(this);
   }
 
+
+  public boolean isGreedyMicroPartitioning() {
+    return GREEDY_MICRO_PARTITIONING.get(this);
+  }
+
+  public int getNumGraphVertices() {
+    return NUM_GRAPH_VERTICES.get(this);
+  }
+
+
+
   public String getRemoteMetisHost() {
     return REMOTE_METIS_HOST.get(this);
   }

@@ -18,12 +18,19 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends LongEdgeStore<V, E> {
 
+
     //store info about the edges going to other partitions
     private ConcurrentHashMap<Integer, Int2LongOpenHashMap> outgoingEdgesInfo;
 
     private CentralizedServiceWorker<LongWritable, V, E> service;
 
     private MicroPartitionerFactory<V, E> microPartitionerFactory;
+
+    private long[] vertexToMicroPartitionMapping;
+
+    private boolean greedyAssignment;
+
+    private int numGraphVertices;
 
     /** Class logger */
     private static final Logger LOG = Logger.getLogger(MetisLongEdgeStore.class);
@@ -45,6 +52,7 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
         this.service = service;
         this.outgoingEdgesInfo = new ConcurrentHashMap<>();
         this.microPartitionerFactory = microPartitionerFactory;
+        this.greedyAssignment = configuration.isGreedyMicroPartitioning();
     }
 
     @Override
