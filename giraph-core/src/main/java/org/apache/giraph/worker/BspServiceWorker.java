@@ -805,6 +805,8 @@ else[HADOOP_NON_SECURE]*/
 
     final int numMicroPartitions = getConfiguration().getUserPartitionCount();
 
+    LOG.info("debug-micro: writing metis file chunk with idx = " + myWorkerIdx + " minMicroId = " + minAssignedMicroPartitionId + " maxMicroId = " + maxAssignedMicroPartitionId);
+
     int numThreads = Math.min(
             GiraphConstants.NUM_COMPUTE_THREADS.get(getConfiguration()),
             numAssignedMicroPartitions);
@@ -843,11 +845,14 @@ else[HADOOP_NON_SECURE]*/
               int startIdx = workItem[1];
               int endIdx = workItem[2];
 
+              LOG.info("debug-micro: processing work item = [" + workIdx + "," + startIdx + "," + endIdx + "]");
+
               for (int partitionId = startIdx; partitionId < endIdx; partitionId++) {
 
                 Int2LongOpenHashMap edgesFromPartition = store.getEdgesFromPartition(partitionId);
 
                 if(edgesFromPartition == null){ //no edges from partition
+                  LOG.info("debug-micro: partition " + partitionId + " has no edges");
                   workSb.append("\n");
                   continue;
                 }
@@ -855,6 +860,7 @@ else[HADOOP_NON_SECURE]*/
                 Int2LongMap.FastEntrySet entries = edgesFromPartition.int2LongEntrySet();
 
                 if(entries == null) { //no edges from partition
+                  LOG.info("debug-micro: partition " + partitionId + " has no edges");
                   workSb.append("\n");
                   continue;
                 }

@@ -1062,12 +1062,6 @@ public class BspServiceMaster<I extends WritableComparable,
                     masterGraphPartitioner.createInitialPartitionOwners(
                             chosenWorkerInfoList, maxWorkers);
 
-            LOG.info("debug-micro: initial partition owners: ");
-
-            for (PartitionOwner po: partitionOwners) {
-                LOG.info("debug-micro: wid = " + po.getWorkerInfo().getWorkerIndex() + " pid = " + po.getPartitionId());
-            }
-
             if (partitionOwners.isEmpty()) {
                 throw new IllegalStateException(
                         "assignAndExchangePartitions: No partition owners set");
@@ -1317,7 +1311,7 @@ public class BspServiceMaster<I extends WritableComparable,
 
         }
 
-        long numVertices =  USER_PARTITION_COUNT.get(getConfiguration());
+        long numVertices =  getConfiguration().getUserPartitionCount();
         long numFullEdges = numVertices * numVertices;
         long numMetisEdges =  edgeInfo[1]/2;
 
@@ -1439,7 +1433,7 @@ public class BspServiceMaster<I extends WritableComparable,
 
         String targetMetisInputFile = CheckpointingUtils.getMetisInputFileName(getConfiguration());
 
-        int numWorkers = getWorkerInfoList().size(); //num partitions to metis problem
+        int numWorkers = getWorkerInfoList().size();
 
         long start = System.currentTimeMillis();
 
@@ -1451,9 +1445,9 @@ public class BspServiceMaster<I extends WritableComparable,
 
         String metisOutputFile = targetMetisInputFile + ".part." + numWorkers;
 
-        int numPartitions = masterGraphPartitioner.getCurrentPartitionOwners().size();
+        int numMicroPartitions = getConfiguration().getUserPartitionCount();
 
-        int[] microPartitionAssignment = new int[numPartitions];
+        int[] microPartitionAssignment = new int[numMicroPartitions];
 
         start = System.currentTimeMillis();
 
