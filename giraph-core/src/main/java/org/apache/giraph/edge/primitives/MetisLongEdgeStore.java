@@ -1,6 +1,5 @@
 package org.apache.giraph.edge.primitives;
 
-import it.unimi.dsi.fastutil.ints.Int2LongMap;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import org.apache.giraph.bsp.CentralizedServiceWorker;
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
@@ -9,7 +8,6 @@ import org.apache.giraph.edge.OutEdges;
 import org.apache.giraph.partition.MicroPartitionerFactory;
 import org.apache.giraph.utils.VertexIdEdgeIterator;
 import org.apache.giraph.utils.VertexIdEdges;
-import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.util.Progressable;

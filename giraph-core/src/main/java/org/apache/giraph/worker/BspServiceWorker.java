@@ -806,7 +806,7 @@ else[HADOOP_NON_SECURE]*/
     final int numMicroPartitions = getConfiguration().getUserPartitionCount();
 
     int numThreads = Math.min(
-            GiraphConstants.NUM_INPUT_THREADS.get(getConfiguration()),
+            GiraphConstants.NUM_COMPUTE_THREADS.get(getConfiguration()),
             numAssignedMicroPartitions);
 
     int numWorkItems = Math.min(numAssignedMicroPartitions, numThreads * 10);

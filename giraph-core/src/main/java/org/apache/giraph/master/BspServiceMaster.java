@@ -1255,8 +1255,6 @@ public class BspServiceMaster<I extends WritableComparable,
                 GiraphConstants.NUM_CHECKPOINT_IO_THREADS.get(getConfiguration()),
                 fileStatuses.length);
 
-
-
         CallableFactory<Void> callableFactory = new CallableFactory<Void>() {
 
             @Override
