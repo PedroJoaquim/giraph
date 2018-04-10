@@ -811,7 +811,7 @@ else[HADOOP_NON_SECURE]*/
             GiraphConstants.NUM_COMPUTE_THREADS.get(getConfiguration()),
             numAssignedMicroPartitions);
 
-    int numWorkItems = Math.min(numAssignedMicroPartitions, numThreads * 10);
+    int numWorkItems = Math.min(numAssignedMicroPartitions, numThreads * 5);
 
     final ConcurrentLinkedQueue<int[]> queue =
             generateUndirectedInputFileWorkItems(assignedMicroPartitionIdsBounds, numAssignedMicroPartitions, numWorkItems);
@@ -844,8 +844,6 @@ else[HADOOP_NON_SECURE]*/
               int workIdx = workItem[0];
               int startIdx = workItem[1];
               int endIdx = workItem[2];
-
-              LOG.info("debug-micro: processing work item = [" + workIdx + "," + startIdx + "," + endIdx + "]");
 
               for (int partitionId = startIdx; partitionId < endIdx; partitionId++) {
 

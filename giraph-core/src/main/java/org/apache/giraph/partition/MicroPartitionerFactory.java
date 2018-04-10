@@ -39,6 +39,8 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
 
     private int numWorkers;
 
+    private int numMicroPartitionsPerWorker;
+
     public MicroPartitionerFactory() {
         this.greedyMetisPartitioning = false;
         this.metisPartitioningDone = false;
@@ -52,6 +54,7 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
             this.numMicroPartitions = conf.getUserPartitionCount();
             this.numPartitionsPerWorker = conf.getNumComputeThreads();
             this.numWorkers = conf.getMaxWorkers();
+            this.numMicroPartitionsPerWorker = this.numMicroPartitions / this.numWorkers;
 
             this.workerInitialMicroPartitionAssignment = new int[numWorkers];
 
@@ -183,7 +186,7 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
 
             int microPartitionId = Math.abs(id.hashCode()) % this.numMicroPartitions;
 
-            int workerIdx = microPartitionId % numWorkers;
+            int workerIdx = Math.min(numWorkers - 1, microPartitionId/this.numMicroPartitionsPerWorker);
 
             return (microPartitionId % numPartitionsPerWorker) + (workerIdx * numPartitionsPerWorker);
         }
