@@ -34,7 +34,7 @@ public class HDFSOptimizedCheckpointHandler
             BspService<I, V, E> bspService,
             CheckpointPathManager pathManager) {
 
-        MasterCheckpointHandler<I, V, E> masterCheckpointHandler = new DefaultMasterCheckpointHandler<I, V, E>();
+        MasterCheckpointHandler<I, V, E> masterCheckpointHandler = new  DefaultMasterCheckpointHandler<I, V, E>();
         masterCheckpointHandler.initialize(centralizedServiceMaster, bspService, pathManager);
 
         return masterCheckpointHandler;

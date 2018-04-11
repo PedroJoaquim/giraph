@@ -18,11 +18,11 @@ public abstract class VertexCheckpointWriter<I extends WritableComparable,
         E extends Writable,
         M extends Writable> {
 
-    private static final String SEPARATOR = "\t";
+    protected static final String SEPARATOR = "\t";
 
-    private static final String EOL = "\n";
+    protected static final String EOL = "\n";
 
-    private final Pattern SEPARATOR_PATTERN = Pattern.compile("[\t ]");
+    protected final Pattern SEPARATOR_PATTERN = Pattern.compile("[\t ]");
 
     private ImmutableClassesGiraphConfiguration<I, V, E> config;
 
