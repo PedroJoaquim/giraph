@@ -254,11 +254,6 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
     return METIS_PARTITIONING.get(this);
   }
 
-
-  public boolean isGreedyMicroPartitioning() {
-    return GREEDY_MICRO_PARTITIONING.get(this);
-  }
-
   public int getNumGraphVertices() {
     return NUM_GRAPH_VERTICES.get(this);
   }
@@ -1411,5 +1406,9 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
    */
   public String getJobId() {
     return get("mapred.job.id", "UnknownJob");
+  }
+
+  public String getVertexMappingPath() {
+    return VERTEX_MAPPING_PATH.get(this);
   }
 }

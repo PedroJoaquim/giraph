@@ -39,6 +39,7 @@ public class ReducedSymmetricalMatrix {
     }
 
     private int convertIndex(int cl, int l) {
+
         int x,y;
 
         if(cl < l){

@@ -26,11 +26,6 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
 
     private MicroPartitionerFactory<V, E> microPartitionerFactory;
 
-    private long[] vertexToMicroPartitionMapping;
-
-    private boolean greedyAssignment;
-
-    private int numGraphVertices;
 
     /** Class logger */
     private static final Logger LOG = Logger.getLogger(MetisLongEdgeStore.class);
@@ -52,7 +47,6 @@ public class MetisLongEdgeStore<V extends Writable, E extends Writable> extends 
         this.service = service;
         this.outgoingEdgesInfo = new ConcurrentHashMap<>();
         this.microPartitionerFactory = microPartitionerFactory;
-        this.greedyAssignment = configuration.isGreedyMicroPartitioning();
     }
 
     @Override

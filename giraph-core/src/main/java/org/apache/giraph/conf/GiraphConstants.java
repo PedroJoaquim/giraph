@@ -1324,14 +1324,14 @@ public interface GiraphConstants {
             "giraph.metisRemoteHost", "",
             "metis remote host to solve problem");
 
-  BooleanConfOption GREEDY_MICRO_PARTITIONING =
-          new BooleanConfOption("giraph.metisGreedyPartitioning", false,
-                  "create greedy micro partitions");
-
   IntConfOption NUM_GRAPH_VERTICES =
           new IntConfOption("giraph.numGraphNodes",
                   -1,
                   "how many vertices in the graph");
+
+  StrConfOption VERTEX_MAPPING_PATH = new StrConfOption(
+          "giraph.vertexMappingPath", "",
+          "path to vertex mapping path");
 
 
 }

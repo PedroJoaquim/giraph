@@ -45,7 +45,7 @@ public class METISVertexCheckpointWriter extends
 
     @Override
     protected String writeVertexID(LongWritable id) {
-        return null;
+        return "";
     }
 
     @Override
