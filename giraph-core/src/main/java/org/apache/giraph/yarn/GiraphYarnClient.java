@@ -74,7 +74,8 @@ public class GiraphYarnClient {
   /** Sleep time between silent progress checks */
   private static final int JOB_STATUS_INTERVAL_MSECS = 800;
   /** Memory (in MB) to allocate for our ApplicationMaster container */
-  private static final int YARN_APP_MASTER_MEMORY_MB = 2560;
+  //private static final int YARN_APP_MASTER_MEMORY_MB = 2560;
+  private static final int YARN_APP_MASTER_MEMORY_MB = 1792;
 
   /** human-readable job name */
   private final String jobName;

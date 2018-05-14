@@ -24,7 +24,9 @@ public class S3InfoSender extends S3Com {
                                       long edgeCut,
                                       double timeToRunMetis,
                                       double shutdownSecs,
-                                      double totalSecs) {
+                                      double totalSecs,
+                                      int numWorkers,
+                                      String simpleName) {
 
         final String clusterID = readClusterInfo(CLUSTER_NAME_JSON_NAME);
 
@@ -35,7 +37,9 @@ public class S3InfoSender extends S3Com {
                 edgeCut,
                 timeToRunMetis,
                 shutdownSecs,
-                totalSecs);
+                totalSecs,
+                numWorkers,
+                simpleName);
 
         uploadToS3(clusterID);
     }
@@ -63,7 +67,9 @@ public class S3InfoSender extends S3Com {
                                      long edgeCut,
                                      double timeToRunMetis,
                                      double shutdownSecs,
-                                     double totalSecs) {
+                                     double totalSecs,
+                                     int numWorkers,
+                                     String computationClassName) {
 
         PrintWriter writer = null;
 
@@ -82,6 +88,8 @@ public class S3InfoSender extends S3Com {
             writer.println(timeToRunMetis);
             writer.println(shutdownSecs);
             writer.println(totalSecs);
+            writer.println(numWorkers);
+            writer.println(computationClassName);
 
             writer.close();
 

@@ -210,7 +210,9 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
                   edgeCut,
                   timeToRunMetisPartitioner,
                   shutdownSecs,
-                  totalSecs);
+                  totalSecs,
+                  this.bspServiceMaster.getConfiguration().getMaxWorkers(),
+                  this.bspServiceMaster.getConfiguration().getComputationClass().getSimpleName());
         }
         GiraphTimers.getInstance().getTotalMs().
           increment(System.currentTimeMillis() - initializeMillis);
