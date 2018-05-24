@@ -25,6 +25,8 @@ import org.apache.giraph.conf.GiraphConstants;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.permission.FsAction;
+import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.mapreduce.MRJobConfig;
 import org.apache.hadoop.yarn.api.records.ApplicationId;
 import org.apache.hadoop.yarn.api.records.LocalResource;
@@ -64,7 +66,8 @@ public class YarnUtils {
   public static void addFsResourcesToMap(Map<String, LocalResource> map,
     GiraphConfiguration giraphConf, ApplicationId appId) throws IOException {
     FileSystem fs = FileSystem.get(giraphConf);
-    Path baseDir = YarnUtils.getFsCachePath(fs, appId);
+    Path baseDir = YarnUtils.getFsCachePath(fs, appId, giraphConf.getYarnClientUser());
+
     boolean coreJarFound = false;
     for (String fileName : giraphConf.getYarnLibJars().split(",")) {
       if (fileName.length() > 0) {
@@ -164,11 +167,24 @@ public class YarnUtils {
    * Get the base HDFS dir we will be storing our LocalResources in.
    * @param fs the file system.
    * @param appId the ApplicationId under which our resources will be stored.
+   * @param user The user that submitted this application.
    * @return the path
    */
   public static Path getFsCachePath(final FileSystem fs,
-    final ApplicationId appId) {
-    return new Path(fs.getHomeDirectory(), HDFS_RESOURCE_DIR + "/" + appId);
+                                    final ApplicationId appId, final String user) {
+    return new Path("/user/" + user,
+            HDFS_RESOURCE_DIR + "/" + appId).makeQualified(fs);
+  }
+
+  /**
+   * Get the base HDFS dir we will be storing our LocalResources in.
+   * @param fs the file system.
+   * @param appId the ApplicationId under which our resources will be stored.
+   * @return the path
+   */
+  public static Path getFsCachePath(final FileSystem fs,
+                                    final ApplicationId appId) {
+    return getFsCachePath(fs, appId, System.getProperty("user.name"));
   }
 
   /**
@@ -209,8 +225,9 @@ public class YarnUtils {
     giraphConf, ApplicationId appId, Map<String, LocalResource>
     localResourceMap) throws IOException {
     FileSystem fs = FileSystem.get(giraphConf);
-    Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId),
-      GiraphConstants.GIRAPH_YARN_CONF_FILE);
+    Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId,
+            giraphConf.getYarnClientUser()),
+            GiraphConstants.GIRAPH_YARN_CONF_FILE);
     YarnUtils.addFileToResourceMap(localResourceMap, fs, hdfsConfPath);
   }
 
@@ -235,10 +252,20 @@ public class YarnUtils {
       fos = new FileOutputStream(localConfPath);
       giraphConf.writeXml(fos);
       FileSystem fs = FileSystem.get(giraphConf);
-      Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId),
-        GiraphConstants.GIRAPH_YARN_CONF_FILE);
+      Path hdfsConfPath = new Path(YarnUtils.getFsCachePath(fs, appId,
+              giraphConf.getYarnClientUser()),
+              GiraphConstants.GIRAPH_YARN_CONF_FILE);
       fos.flush();
       fs.copyFromLocalFile(false, true, new Path(localConfPath), hdfsConfPath);
+
+      try {
+        fs.setPermission(hdfsConfPath, new FsPermission(FsAction.READ_WRITE,
+                FsAction.READ_WRITE, FsAction.READ_WRITE));
+      } catch (IOException e) {
+        LOG.info("Unable to set RW permissions on giraph configuration " +
+                hdfsConfPath);
+      }
+
     } finally {
       if (null != fos) {
         fos.close();

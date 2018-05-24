@@ -615,6 +615,19 @@ public class BspServiceMaster<I extends WritableComparable,
     // If the minimum percentage is not met, fail the job.  Otherwise
     // generate the input splits
     List<WorkerInfo> healthyWorkerInfoList = checkWorkers();
+
+    Collections.sort(healthyWorkerInfoList, new Comparator<WorkerInfo>() {
+      @Override
+      public int compare(WorkerInfo wi1, WorkerInfo wi2) {
+        return Integer.compare(wi1.getTaskId(), wi2.getTaskId());
+      }
+    });
+
+    for (int i = 0; i < healthyWorkerInfoList.size(); i++) {
+      healthyWorkerInfoList.get(i).setWorkerIndex(i);
+    }
+
+
     if (healthyWorkerInfoList == null) {
       setJobStateFailed("Not enough healthy workers to create input splits");
       return -1;
@@ -1572,15 +1585,17 @@ public class BspServiceMaster<I extends WritableComparable,
           return Integer.compare(wi1.getTaskId(), wi2.getTaskId());
         }
       });
-      for (WorkerInfo workerInfo : chosenWorkerInfoList) {
+      for (int i = 0; i < chosenWorkerInfoList.size(); i++) {
+        chosenWorkerInfoList.get(i).setWorkerIndex(i);
+
         String workerInfoHealthyPath =
-            getWorkerInfoHealthyPath(getApplicationAttempt(),
-                getSuperstep()) + "/" +
-                workerInfo.getHostnameId();
+                getWorkerInfoHealthyPath(getApplicationAttempt(),
+                        getSuperstep()) + "/" +
+                        chosenWorkerInfoList.get(i).getHostnameId();
         if (getZkExt().exists(workerInfoHealthyPath, true) == null) {
           LOG.warn("coordinateSuperstep: Chosen worker " +
-              workerInfoHealthyPath +
-              " is no longer valid, failing superstep");
+                  workerInfoHealthyPath +
+                  " is no longer valid, failing superstep");
         }
       }
     }

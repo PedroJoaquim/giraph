@@ -579,13 +579,19 @@ else[HADOOP_NON_SECURE]*/
 
     // Create remaining partitions owned by this worker.
     for (PartitionOwner partitionOwner : masterSetPartitionOwners) {
-      if (partitionOwner.getWorkerInfo().equals(getWorkerInfo()) &&
-          !getPartitionStore().hasPartition(
-              partitionOwner.getPartitionId())) {
-        Partition<I, V, E> partition =
-            getConfiguration().createPartition(
-                partitionOwner.getPartitionId(), getContext());
-        getPartitionStore().addPartition(partition);
+
+      if(partitionOwner.getWorkerInfo().equals(getWorkerInfo())){
+
+        this.workerInfo.setWorkerIndex(partitionOwner.getWorkerInfo().getWorkerIndex());
+
+        if (!getPartitionStore().hasPartition(
+                partitionOwner.getPartitionId())) {
+          Partition<I, V, E> partition =
+                  getConfiguration().createPartition(
+                          partitionOwner.getPartitionId(), getContext());
+
+          getPartitionStore().addPartition(partition);
+        }
       }
     }
 

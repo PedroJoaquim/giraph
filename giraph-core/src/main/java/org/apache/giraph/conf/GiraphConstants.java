@@ -1274,5 +1274,27 @@ public interface GiraphConstants {
   /** Number of supersteps job will run for */
   IntConfOption SUPERSTEP_COUNT = new IntConfOption("giraph.numSupersteps", -1,
       "Number of supersteps job will run for");
+
+  /** User that submitted the Yarn Application. */
+  StrConfOption GIRAPH_YARN_CLIENT_USER = new StrConfOption(
+          "giraph.yarn.client.user", "yarn",
+          "User that submitted the Yarn Application");
+
+  BooleanConfOption UNDIRECTED_GRAPH =
+          new BooleanConfOption("giraph.undirectedGraph", false,
+                  "Undirected input graph");
+
+  IntConfOption NUM_GRAPH_VERTICES =
+          new IntConfOption("giraph.numGraphNodes",
+                  -1,
+                  "how many vertices in the graph");
+
+  StrConfOption VERTEX_MAPPING_PATH = new StrConfOption(
+          "giraph.vertexMappingPath", "",
+          "path to vertex mapping path");
+
+  BooleanConfOption RANDOM_METIS_MICRO_PARTITIONING =
+          new BooleanConfOption("giraph.rndMicroMetis", false,
+                  "do metis partitioning");
 }
 // CHECKSTYLE: resume InterfaceIsTypeCheck

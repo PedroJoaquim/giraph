@@ -1265,4 +1265,20 @@ public class GiraphConfiguration extends Configuration
   public int getHdfsFileCreationRetryWaitMs() {
     return HDFS_FILE_CREATION_RETRY_WAIT_MS.get(this);
   }
+
+  /**
+   * Get the user that submitted the YarnApplication.
+   * @return user the user that submitted the application.
+   */
+  public String getYarnClientUser() {
+    return GIRAPH_YARN_CLIENT_USER.get(this);
+  }
+
+  public boolean isUndirectedGraph() {
+    return UNDIRECTED_GRAPH.get(this);
+  }
+
+  public int getUserPartitionCount(){
+    return USER_PARTITION_COUNT.get(this);
+  }
 }

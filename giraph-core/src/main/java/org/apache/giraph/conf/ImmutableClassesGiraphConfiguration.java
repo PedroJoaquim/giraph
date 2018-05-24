@@ -1351,4 +1351,16 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
   public String getJobId() {
     return get("mapred.job.id", "UnknownJob");
   }
+
+  public int getNumGraphVertices() {
+    return NUM_GRAPH_VERTICES.get(this);
+  }
+
+  public boolean isRandomMicroAssignment(){
+    return RANDOM_METIS_MICRO_PARTITIONING.get(this);
+  }
+
+  public String getVertexMappingPath() {
+    return VERTEX_MAPPING_PATH.get(this);
+  }
 }
