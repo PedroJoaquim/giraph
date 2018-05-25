@@ -254,6 +254,10 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
     return METIS_PARTITIONING.get(this);
   }
 
+  public boolean isRandomMicroAssignment(){
+    return RANDOM_METIS_MICRO_PARTITIONING.get(this);
+  }
+
   public int getNumGraphVertices() {
     return NUM_GRAPH_VERTICES.get(this);
   }

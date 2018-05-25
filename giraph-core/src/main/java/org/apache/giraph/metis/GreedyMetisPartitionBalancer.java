@@ -31,7 +31,6 @@ public class GreedyMetisPartitionBalancer<V extends Writable, E extends Writable
 
     public void reassignPartitions(BspServiceWorker<LongWritable, V, E> serviceWorker) {
 
-
         long start = System.currentTimeMillis();
         List<Partition<LongWritable, V, E>> newPartitionList = new ArrayList<>();
 

@@ -615,18 +615,15 @@ public class BspServiceMaster<I extends WritableComparable,
         // generate the input splits
         List<WorkerInfo> healthyWorkerInfoList = checkWorkers();
 
-        if(getConfiguration().isMETISPartitioning()){
-
-            Collections.sort(healthyWorkerInfoList, new Comparator<WorkerInfo>() {
-                @Override
-                public int compare(WorkerInfo wi1, WorkerInfo wi2) {
-                    return Integer.compare(wi1.getTaskId(), wi2.getTaskId());
-                }
-            });
-
-            for (int i = 0; i < healthyWorkerInfoList.size(); i++) {
-                healthyWorkerInfoList.get(i).setWorkerIndex(i);
+        Collections.sort(healthyWorkerInfoList, new Comparator<WorkerInfo>() {
+            @Override
+            public int compare(WorkerInfo wi1, WorkerInfo wi2) {
+                return Integer.compare(wi1.getTaskId(), wi2.getTaskId());
             }
+        });
+
+        for (int i = 0; i < healthyWorkerInfoList.size(); i++) {
+            healthyWorkerInfoList.get(i).setWorkerIndex(i);
         }
 
         if (healthyWorkerInfoList == null) {
@@ -1263,6 +1260,7 @@ public class BspServiceMaster<I extends WritableComparable,
                             if (targetFile == null) {
                                 break;
                             }
+
                             Path targetPartitionInfoPath = targetFile.getPath();
 
                             fs.copyToLocalFile(true,
@@ -2324,11 +2322,17 @@ public class BspServiceMaster<I extends WritableComparable,
             coordinateInputSplits();
 
             if(getConfiguration().isMETISPartitioning()){
-                long start = System.currentTimeMillis();
-                doMETISPartitioning();
-                long end = System.currentTimeMillis();
 
-                LOG.info("debug-metis-master: FULL MASTER METIS TIME  = " + (end-start)/1000.0d + " secs");
+                if(getConfiguration().getUserPartitionCount() == getConfiguration().getMaxWorkers()){
+                    LOG.info("debug-metis-master: num workers == num partitions, bypassing METIS micro partition assignment");
+                }
+                else {
+                    long start = System.currentTimeMillis();
+                    doMETISPartitioning();
+                    long end = System.currentTimeMillis();
+
+                    LOG.info("debug-metis-master: FULL MASTER METIS TIME  = " + (end-start)/1000.0d + " secs");
+                }
             }
         }
 

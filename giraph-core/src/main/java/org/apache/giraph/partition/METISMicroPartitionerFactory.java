@@ -1,7 +1,6 @@
 package org.apache.giraph.partition;
 
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
-import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.LongWritable;
@@ -10,15 +9,15 @@ import org.apache.log4j.Logger;
 
 import java.io.*;
 
-public class GreedyMicroPartitionerFactory<V extends Writable, E extends Writable>
+public class METISMicroPartitionerFactory<V extends Writable, E extends Writable>
         extends MicroPartitionerFactory<V, E> {
 
     /** Class logger */
-    private static final Logger LOG = Logger.getLogger(GreedyMicroPartitionerFactory.class);
+    private static final Logger LOG = Logger.getLogger(METISMicroPartitionerFactory.class);
 
     private int[] vertexToPartitionMapping;
 
-    public GreedyMicroPartitionerFactory() {
+    public METISMicroPartitionerFactory() {
     }
 
     @Override
@@ -26,19 +25,22 @@ public class GreedyMicroPartitionerFactory<V extends Writable, E extends Writabl
         super.setConf(conf);
 
         long start = System.currentTimeMillis();
-        readVertexToPartitionMapping();
+        long numVerticesRead = readVertexToPartitionMapping();
         long end = System.currentTimeMillis();
 
-        LOG.info("debug-metis: time to load grredy vertex assignment = " + (end-start)/1000.0d + " secs");
+        LOG.info("debug-metis: time to load metis vertex assignment = " + (end-start)/1000.0d + " secs");
+        LOG.info("debug-metis: num vertex mappings read  = " + numVerticesRead + " expected = " +  getConf().getNumGraphVertices());
     }
 
-    public void readVertexToPartitionMapping() {
+    public long readVertexToPartitionMapping() {
 
         int numGraphVertices = getConf().getNumGraphVertices();
 
         this.vertexToPartitionMapping = new int[numGraphVertices];
 
         String inputPathName = getConf().getVertexMappingPath();
+
+        int lineNumber = 0;
 
         try {
 
@@ -50,7 +52,7 @@ public class GreedyMicroPartitionerFactory<V extends Writable, E extends Writabl
 
             try {
                 String line;
-                int lineNumber = 0;
+
                 while ((line = br.readLine()) != null){
                     this.vertexToPartitionMapping[lineNumber++] = Integer.parseInt(line);
                 }
@@ -64,10 +66,13 @@ public class GreedyMicroPartitionerFactory<V extends Writable, E extends Writabl
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        return lineNumber;
+
     }
 
     @Override
     public int getMicroPartition(LongWritable id){
-        return vertexToPartitionMapping[(int) id.get()];
+        return vertexToPartitionMapping[(int) (id.get() - 1)];
     }
 }

@@ -26,6 +26,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
+import com.google.common.collect.Iterables;
 import it.unimi.dsi.fastutil.ints.Int2LongMap;
 import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
@@ -702,12 +703,61 @@ else[HADOOP_NON_SECURE]*/
 
     if(getConfiguration().isMETISPartitioning()){
 
-      long start1 = System.currentTimeMillis();
-      doMetisPartitioning();
-      long end2 = System.currentTimeMillis();
+      if(getConfiguration().getUserPartitionCount() == getConfiguration().getMaxWorkers()){
+        LOG.info("debug-metis-worker: num workers == num partitions, bypassing METIS micro partition assignment");
 
-      LOG.info("debug-metis-worker: FULL WORKER METIS TIME = " + ((end2-start1)/1000.0d) + " secs");
+        ((MicroPartitionerFactory) this.getGraphPartitionerFactory()).
+                metisPartitioningDone(((MicroPartitionerFactory) this.getGraphPartitionerFactory()).getWorkerInitialMicroPartitionAssignment());
+      }
+      else {
+        long start1 = System.currentTimeMillis();
+        doMetisPartitioning();
+        long end2 = System.currentTimeMillis();
+
+        LOG.info("debug-metis-worker: PARTITIONS = " + Iterables.toString(getPartitionIds()));
+        LOG.info("debug-metis-worker: FULL WORKER METIS TIME = " + ((end2-start1)/1000.0d) + " secs");
+      }
     }
+
+    //calc local edge cut
+    PartitionStore<I, V, E> partitionStore2 = getPartitionStore();
+
+    long start = System.currentTimeMillis();
+
+    partitionStore2.startIteration();
+
+    long edgesCut = 0;
+    long numVertices = 0;
+
+    while (true){
+
+      Partition<I, V, E> partition = partitionStore2.getNextPartition();
+
+      if(partition == null){
+        break;
+      }
+
+      for (Vertex<I, V, E> vertex : partition) {
+
+        numVertices++;
+
+        for (Edge<I, E> edge : vertex.getEdges()) {
+          int targetPartition = getPartitionId(edge.getTargetVertexId());
+
+          if(!partitionStore2.hasPartition(targetPartition)){
+            edgesCut++;
+          }
+        }
+      }
+
+      partitionStore2.putPartition(partition);
+    }
+
+    LOG.info("debug-metis: worker " + getWorkerInfo().getWorkerIndex() + " | partitions : " + Iterables.toString(partitionStore2.getPartitionIds()) +
+            " | numVertices = " + numVertices + " | " +
+            " | edgesCut = " + edgesCut + " | time to calc edgeCut = " + ((System.currentTimeMillis() - start)/1000.0d) + " secs");
+
+
 
     // Generate the partition stats for the input superstep and process
     // if necessary
@@ -921,7 +971,7 @@ else[HADOOP_NON_SECURE]*/
     BufferedWriter br = new BufferedWriter( new OutputStreamWriter( os, "UTF-8" ) );
 
     for (StringBuilder sb : sbArray) {
-        br.write(sb.toString());
+      br.write(sb.toString());
     }
 
     br.close();

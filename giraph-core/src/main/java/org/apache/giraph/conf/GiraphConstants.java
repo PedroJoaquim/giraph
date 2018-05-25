@@ -1319,7 +1319,12 @@ public interface GiraphConstants {
           new BooleanConfOption("giraph.metisPartitioning", false,
                   "do metis partitioning");
 
-    /** Name of the file in hdfs the vertices to partition assignment information */
+  BooleanConfOption RANDOM_METIS_MICRO_PARTITIONING =
+          new BooleanConfOption("giraph.rndMicroMetis", false,
+                  "do metis partitioning");
+
+
+  /** Name of the file in hdfs the vertices to partition assignment information */
     StrConfOption REMOTE_METIS_HOST = new StrConfOption(
             "giraph.metisRemoteHost", "",
             "metis remote host to solve problem");

@@ -23,6 +23,7 @@ import org.apache.giraph.edge.Edge;
 import org.apache.giraph.graph.Vertex;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.NullWritable;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
 
@@ -56,14 +57,25 @@ public class ConnectedComponentsComputation extends
    * @param messages Iterator of messages from the previous superstep.
    * @throws IOException
    */
+
+  /** Class logger */
+  private static final Logger LOG =
+          Logger.getLogger(ConnectedComponentsComputation.class);
   @Override
   public void compute(
       Vertex<IntWritable, IntWritable, NullWritable> vertex,
       Iterable<IntWritable> messages) throws IOException {
+
+
+    if(getSuperstep() == 0){
+      vertex.setValue(vertex.getId());
+    }
+
     int currentComponent = vertex.getValue().get();
 
     // First superstep is special, because we can simply look at the neighbors
     if (getSuperstep() == 0) {
+
       for (Edge<IntWritable, NullWritable> edge : vertex.getEdges()) {
         int neighbor = edge.getTargetVertexId().get();
         if (neighbor < currentComponent) {

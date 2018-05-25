@@ -5,6 +5,8 @@ import org.apache.giraph.worker.WorkerInfo;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+
 import java.util.*;
 
 public class MicroPartitionerFactory<V extends Writable, E extends Writable>
@@ -96,7 +98,7 @@ public class MicroPartitionerFactory<V extends Writable, E extends Writable>
     //give workers contiguous partitions
     @Override
     public int getWorker(int partition, int partitionCount, int workerCount) {
-        return partition % workerCount;
+        throw new NotImplementedException(); //should not be called in this class
     }
 
     @Override

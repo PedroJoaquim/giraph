@@ -173,6 +173,7 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
         if (LOG.isInfoEnabled()) {
           LOG.info("setup: Took " + setupSecs + " seconds.");
         }
+        double computationalSupersteps = 0;
         for (Entry<Long, Double> entry : superstepSecsMap.entrySet()) {
           if (LOG.isInfoEnabled()) {
             if (entry.getKey().longValue() ==
@@ -183,15 +184,19 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
               LOG.info("superstep " + entry.getKey() + ": Took " +
                   entry.getValue() + " seconds.");
             }
+            computationalSupersteps += entry.getValue();
           }
           context.progress();
         }
+
+
         if (LOG.isInfoEnabled()) {
 
           double shutdownSecs = (System.currentTimeMillis() - endMillis) / 1000.0d;
 
           double totalSecs =  (System.currentTimeMillis() - initializeMillis) / 1000.0d;
 
+          LOG.info("Total Computation Time: Took " + computationalSupersteps + " seconds");
           LOG.info("shutdown: Took " + shutdownSecs + " seconds.");
           LOG.info("total: Took " + totalSecs + " seconds.");
 
