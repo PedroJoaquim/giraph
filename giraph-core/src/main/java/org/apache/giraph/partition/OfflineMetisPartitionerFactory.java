@@ -29,11 +29,15 @@ public class OfflineMetisPartitionerFactory <V extends Writable, E extends Writa
 
     private int numPartitionsPerWorker;
 
+    private int vertexMappingBegin;
+
     @Override
     public void setConf(ImmutableClassesGiraphConfiguration<LongWritable, V, E> conf) {
         super.setConf(conf);
 
         this.numPartitionsPerWorker = conf.getNumComputeThreads();
+
+        this.vertexMappingBegin = conf.getVertexMappingBegin();
 
         int numUserPartitions = conf.getUserPartitionCount();
 
@@ -112,7 +116,7 @@ public class OfflineMetisPartitionerFactory <V extends Writable, E extends Writa
     @Override
     public int getPartition(LongWritable id, int partitionCount, int workerCount) {
 
-        int initialPartitionId = this.vertexToPartitionMapping[(int) (id.get() - 1)];
+        int initialPartitionId = this.vertexToPartitionMapping[(int) (id.get() - this.vertexMappingBegin)];
 
         int assignedWorker = this.partitionToWorkerMapping[initialPartitionId];
 

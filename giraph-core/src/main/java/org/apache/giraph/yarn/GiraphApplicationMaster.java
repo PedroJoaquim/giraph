@@ -121,8 +121,6 @@ public class GiraphApplicationMaster {
   private final int containersToLaunch;
   /** MB of JVM heap per Giraph task container */
   private final int heapPerContainer;
-  /** MB of JVM heap per Giraph master task container */
-  private final int heapForMasterContainer;
   /** Giraph configuration for this job, transported here by YARN framework */
   private final ImmutableClassesGiraphConfiguration giraphConf;
   /** Yarn configuration for this job*/
@@ -176,10 +174,6 @@ public class GiraphApplicationMaster {
     containersToLaunch = giraphConf.getMaxWorkers() + 1;
     executor = Executors.newFixedThreadPool(containersToLaunch);
     heapPerContainer = giraphConf.getYarnTaskHeapMb();
-
-    heapForMasterContainer =
-            giraphConf.getYarnMasterTaskHeapMb() == GIRAPH_YARN_TASK_HEAP_MB_DEFAULT ?
-                    heapPerContainer : giraphConf.getYarnMasterTaskHeapMb();
 
     LOG.info("GiraphAM  for ContainerId " + cId + " ApplicationAttemptId " +
             aId);
@@ -277,7 +271,7 @@ public class GiraphApplicationMaster {
     // Keep looping until all the containers are launched and shell script
     // executed on them ( regardless of success/failure).
     for (int i = 0; i < containersToLaunch; ++i) {
-      ContainerRequest containerAsk = setupContainerAskForRM(i == 0 ? heapForMasterContainer : heapPerContainer);
+      ContainerRequest containerAsk = setupContainerAskForRM(heapPerContainer);
       amRMClient.addContainerRequest(containerAsk);
     }
   }
@@ -589,9 +583,7 @@ public class GiraphApplicationMaster {
      */
     private List<String> generateShellExecCommand() {
 
-      int taskId = heapForMasterContainer != heapPerContainer ?
-              (container.getResource().getMemory() == heapForMasterContainer ? 0 : getNextTaskId()) :
-              (container.getId().getId() - minContainerID);
+      int taskId = container.getId().getId() - minContainerID;
 
       return ImmutableList.of("java " +
               "-Xmx" + container.getResource().getMemory() + "M " +

@@ -68,6 +68,10 @@ public class SccComputation extends
       Vertex<LongWritable, SccVertexValue, NullWritable> vertex,
       Iterable<LongWritable> messages) throws IOException {
 
+    if(getSuperstep() == 0){
+      vertex.setValue(new SccVertexValue(vertex.getId().get()));
+    }
+
     SccVertexValue vertexValue = vertex.getValue();
 
     if (!vertexValue.isActive()) {

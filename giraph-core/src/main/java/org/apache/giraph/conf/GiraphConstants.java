@@ -1338,6 +1338,11 @@ public interface GiraphConstants {
           "giraph.vertexMappingPath", "",
           "path to vertex mapping path");
 
+  IntConfOption METIS_VERTEX_MAPPING_BEGIN =
+          new IntConfOption("giraph.vertexMappingBegin",
+                  1,
+                  "how many vertices in the graph");
+
 
 }
 // CHECKSTYLE: resume InterfaceIsTypeCheck
