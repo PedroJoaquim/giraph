@@ -69,8 +69,7 @@ public abstract class InputSplitsCallable<I extends WritableComparable,
   /** Context */
   protected final Mapper<?, ?, ?, ?>.Context context;
   /** Handles IPC communication */
-  protected final WorkerClientRequestProcessor<I, V, E>
-  workerClientRequestProcessor;
+  protected final WorkerClientRequestProcessor<I, V, E> workerClientRequestProcessor;
   /**
    * Stores and processes the list of InputSplits advertised
    * in a tree of child znodes by the master.

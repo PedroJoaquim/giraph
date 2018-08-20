@@ -59,7 +59,8 @@ public class MasterInputSplitsHandler {
           "0.99,1", "Store in counters timestamps when we finished reading " +
           "these fractions of input");
 
-
+  /** Class logger */
+  private static final Logger LOG = Logger.getLogger(MasterInputSplitsHandler.class);
   /** Whether to use locality information */
   private final boolean useLocality;
   /** Master client */
@@ -158,6 +159,7 @@ public class MasterInputSplitsHandler {
     splitsMap.put(splitsType, inputSplitsOrganizer);
     latchesMap.get(splitsType).countDown();
     numSplitsPerType.put(splitsType, serializedSplits.size());
+    LOG.info("debug-splits: added " + inputSplits.size() + " splits: " + splitsType);
   }
 
   /**

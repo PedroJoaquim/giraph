@@ -28,7 +28,7 @@ public class S3InfoSender extends S3Com {
                                       int numWorkers,
                                       String simpleName) {
 
-        final String clusterID = readClusterInfo(CLUSTER_NAME_JSON_NAME);
+       /* final String clusterID = readClusterInfo(CLUSTER_NAME_JSON_NAME);
 
         writeTmpFile(setupSecs,
                 superstepSecsMap,
@@ -41,7 +41,7 @@ public class S3InfoSender extends S3Com {
                 numWorkers,
                 simpleName);
 
-        uploadToS3(clusterID);
+        uploadToS3(clusterID);*/
     }
 
     private static void uploadToS3(String clusterID) {

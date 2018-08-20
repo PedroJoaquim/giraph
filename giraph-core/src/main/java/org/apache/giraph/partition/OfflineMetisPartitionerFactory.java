@@ -57,26 +57,19 @@ public class OfflineMetisPartitionerFactory <V extends Writable, E extends Writa
         }
         else {
 
-            String partitionToWorkerMappingPath;
-
             if(getConf().isRandomMicroAssignment()){
                 LOG.info("debug-metis: running random micro METIS partitioning");
-                partitionToWorkerMappingPath = getConf().getVertexMappingPath() + "." + numWorkers + ".randomPartitionMapping";
             }
             else {
                 LOG.info("debug-metis: running micro METIS partitioning");
-                partitionToWorkerMappingPath = getConf().getVertexMappingPath() + "." + numWorkers + ".partitionMapping";
             }
 
-            this.partitionToWorkerMapping = readMappingToArray(numUserPartitions, partitionToWorkerMappingPath);
-
+            this.partitionToWorkerMapping = readMappingToArray(numUserPartitions, getConf().getMicroPartitionMappingPath());
         }
 
         int numGraphVertices = getConf().getNumGraphVertices();
 
-        String vertexToPartitionMapping = getConf().getVertexMappingPath() + "." + numUserPartitions + ".vertexMapping";
-
-        this.vertexToPartitionMapping = readMappingToArray(numGraphVertices, vertexToPartitionMapping);
+        this.vertexToPartitionMapping = readMappingToArray(numGraphVertices, getConf().getVertexMappingPath());
     }
 
     private int[] readMappingToArray(int arraySize, String fileHDFSPath) {

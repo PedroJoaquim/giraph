@@ -1,6 +1,5 @@
 package org.apache.giraph.examples.sssp;
 
-import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.edge.Edge;
 import org.apache.giraph.edge.EdgeFactory;
 import org.apache.giraph.worker.checkpointing.io.VertexCheckpointWriter;
@@ -8,7 +7,6 @@ import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.log4j.Logger;
-
 
 public class SSSPVertexCheckpointWriter extends
         VertexCheckpointWriter<LongWritable, DoubleWritable, NullWritable, DoubleWritable> {

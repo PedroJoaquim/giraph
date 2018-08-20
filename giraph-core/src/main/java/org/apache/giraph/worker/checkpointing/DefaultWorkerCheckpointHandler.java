@@ -81,6 +81,8 @@ public class DefaultWorkerCheckpointHandler
         try {
             GlobalStats globalStats = loadVerticesAndMessagesFromHDFS(superstep);
 
+            loadWorkerContextFromCheckpoint(superstep);
+
             long endCheckpointRestart = System.currentTimeMillis();
 
             writeRestartFromCheckpointTime((endCheckpointRestart - startCheckpointRestart) / 1000.0);
@@ -91,6 +93,26 @@ public class DefaultWorkerCheckpointHandler
             throw new RuntimeException(
                     "loadCheckpoint: Failed for superstep=" + superstep, e);
         }
+    }
+
+    private void loadWorkerContextFromCheckpoint(long superstep) throws IOException {
+
+        String metadataCheckpointPath =
+                getPathManager().createMetadataCheckpointFilePath(superstep, true, 0); //assume all the same
+
+        DataInputStream metadataStream =
+                getBspService().getFs().open(new Path(metadataCheckpointPath));
+
+        int previousNumberOfPartitions = metadataStream.readInt();
+
+        for (int i = 0; i < previousNumberOfPartitions; i++) {
+            metadataStream.readInt();
+        }
+
+        getCentralizedServiceWorker().getWorkerContext().readFields(metadataStream);
+
+        metadataStream.close();
+
     }
 
     protected GlobalStats loadVerticesAndMessagesFromHDFS(long superstep) throws IOException {
@@ -517,7 +539,7 @@ else[HADOOP_NON_SECURE]*/
 
         long superstep = getBspService().getSuperstep();
 
-        int workerId = getBspService().getWorkerId(getCentralizedServiceWorker().getWorkerInfo());
+        int workerId = getCentralizedServiceWorker().getWorkerInfo().getWorkerIndex();
 
         Path validFilePath = deleteAndCreateCheckpointFilePath(
                 getPathManager().createValidCheckpointFilePath(superstep, false, workerId));
@@ -534,6 +556,8 @@ else[HADOOP_NON_SECURE]*/
         for (Integer partitionId : getCentralizedServiceWorker().getPartitionStore().getPartitionIds()) {
             metadataOutputStream.writeInt(partitionId);
         }
+
+        getCentralizedServiceWorker().getWorkerContext().write(metadataOutputStream);
 
         metadataOutputStream.close();
 

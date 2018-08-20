@@ -12,6 +12,7 @@ import org.apache.log4j.Logger;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Set;
 
 public class MSSPMasterCompute extends MasterCompute {
 
@@ -45,23 +46,28 @@ public class MSSPMasterCompute extends MasterCompute {
         registerPersistentAggregator(MultipleSourcesShortestPaths.CURRENT_EPOCH_AGG, IntSumAggregator.class);
         registerAggregator(MultipleSourcesShortestPaths.MESSAGES_SENT_AGG, LongSumAggregator.class);
 
-
         StringBuilder aggregatorValue = new StringBuilder();
 
         int numLandMarks = MultipleSourcesShortestPaths.NUM_LANDMARKS.get(getConf());
 
         this.maxEpoch = numLandMarks - 1;
 
-        long inc = MultipleSourcesShortestPaths.INC_LANDMARKS.get(getConf());
+        long maxLandmarkId = MultipleSourcesShortestPaths.MAX_LANDMARK_ID.get(getConf());
 
-        aggregatorValue.append(1);
-
-        for (int i = 1; i < numLandMarks; i++) {
-            aggregatorValue.append(MultipleSourcesShortestPaths.AGGREGATOR_SEPARATOR).append(i * inc);
-        }
+        generateRandomLandmarkIds(numLandMarks, maxLandmarkId, aggregatorValue);
 
         setAggregatedValue(MultipleSourcesShortestPaths.LANDMARK_VERTICES_AGG, new Text(aggregatorValue.toString()));
 
+    }
+
+    private void generateRandomLandmarkIds(int numLandMarks, long maxLandmarkId, StringBuilder aggregatorValue) {
+
+        aggregatorValue.append(1);
+
+        //for now just consider sequential ids
+        for (int i = 2; i <= numLandMarks; i++) {
+            aggregatorValue.append(MultipleSourcesShortestPaths.AGGREGATOR_SEPARATOR).append(i);
+        }
     }
 
     @Override

@@ -1338,6 +1338,11 @@ public interface GiraphConstants {
           "giraph.vertexMappingPath", "",
           "path to vertex mapping path");
 
+  StrConfOption MICRO_PARTITION_MAPPING_PATH = new StrConfOption(
+          "giraph.microPartitionMappingPath", "",
+          "path to micro partition mapping path");
+
+
   IntConfOption METIS_VERTEX_MAPPING_BEGIN =
           new IntConfOption("giraph.vertexMappingBegin",
                   1,

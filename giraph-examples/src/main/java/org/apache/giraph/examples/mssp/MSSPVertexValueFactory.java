@@ -9,11 +9,11 @@ import org.apache.hadoop.io.DoubleWritable;
 import java.util.Arrays;
 
 public class MSSPVertexValueFactory
-        implements VertexValueFactory<ArrayWritable<DoubleWritable>>, GiraphConfigurationSettable {
+        implements VertexValueFactory<MSSPVertexValue>, GiraphConfigurationSettable {
 
     private ImmutableClassesGiraphConfiguration conf;
 
-    private static final DoubleWritable maxValue = new DoubleWritable(Double.MAX_VALUE);
+    private static final DoubleWritable maxValue = new DoubleWritable(10000);
 
     @Override
     public void setConf(ImmutableClassesGiraphConfiguration configuration) {
@@ -21,11 +21,11 @@ public class MSSPVertexValueFactory
     }
 
     @Override
-    public ArrayWritable<DoubleWritable> newInstance() {
+    public MSSPVertexValue newInstance() {
 
-        DoubleWritable[] initialValues = new DoubleWritable[MultipleSourcesShortestPaths.NUM_LANDMARKS.get(this.conf)];
-        Arrays.fill(initialValues, maxValue);
+        double[] initialValues = new double[MultipleSourcesShortestPaths.NUM_LANDMARKS.get(this.conf)];
+        Arrays.fill(initialValues, maxValue.get());
 
-        return new ArrayWritable<DoubleWritable>(DoubleWritable.class, initialValues);
+        return new MSSPVertexValue(initialValues, initialValues.length);
     }
 }

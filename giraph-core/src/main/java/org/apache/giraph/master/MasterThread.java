@@ -208,6 +208,8 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
 
           long numEdges = this.bspServiceMaster.getNumEdges();
 
+          LOG.info("debug-checkpoint: MASTER TIME TO RESTART FROM CHECKPOINT = " + timeToReadCheckpoint + " SECS");
+
           S3InfoSender.uploadInfoToS3(setupSecs,
                   superstepSecsMap,
                   timeToReadCheckpoint,

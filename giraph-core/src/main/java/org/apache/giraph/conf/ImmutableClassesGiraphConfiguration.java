@@ -1415,4 +1415,8 @@ public class ImmutableClassesGiraphConfiguration<I extends WritableComparable,
   public String getVertexMappingPath() {
     return VERTEX_MAPPING_PATH.get(this);
   }
+
+  public String getMicroPartitionMappingPath() {
+    return MICRO_PARTITION_MAPPING_PATH.get(this);
+  }
 }

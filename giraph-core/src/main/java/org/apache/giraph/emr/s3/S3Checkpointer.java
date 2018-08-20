@@ -28,7 +28,7 @@ public class S3Checkpointer extends S3Com{
 
         final String srcPattern = "'.*/" + superstep + "\\..*'";
 
-        final String s3Command =  S3_DIST_CP_CMD_PREFIX + srcPattern;
+        /*final String s3Command =  S3_DIST_CP_CMD_PREFIX + srcPattern;
 
         final String key = downloadKeyFile(giraphConf);
 
@@ -58,6 +58,6 @@ public class S3Checkpointer extends S3Com{
             }
         };
 
-        t.start();
+        t.start();*/
     }
 }

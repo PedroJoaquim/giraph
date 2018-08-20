@@ -785,6 +785,8 @@ public class NettyClient {
       LOG.warn("Creating large request of type " + request.getClass() +
         ", size " + request.getSerializedSize() +
         " bytes. Check netty buffer size.");
+
+      LOG.info("debug-loading: SIZE = " + request.getSerializedSize() +  " THRESHOLD = "  + requestSizeWarningThreshold * sendBufferSize);
     }
     writeRequestToChannel(newRequestInfo);
     return requestId;
@@ -838,7 +840,7 @@ public class NettyClient {
             clientRequestIdRequestInfoMap.size() + " requests");
       }
       flowControl.messageAckReceived(senderId, requestId, response);
-      // Help #waitAllRequests() to finish faster
+      // Help #waRequests() to finish faster
       synchronized (clientRequestIdRequestInfoMap) {
         clientRequestIdRequestInfoMap.notifyAll();
       }

@@ -25,6 +25,7 @@ import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.graph.GraphTaskManager;
 import org.apache.giraph.job.JobProgressTracker;
 import org.apache.giraph.partition.GraphPartitionerFactory;
+import org.apache.giraph.partition.LocalityAwarePartitionerFactory;
 import org.apache.giraph.utils.CheckpointingUtils;
 import org.apache.giraph.worker.WorkerInfo;
 import org.apache.giraph.zk.BspEvent;
@@ -343,6 +344,7 @@ public abstract class BspService<I extends WritableComparable,
             restartedSuperstep == UNSET_SUPERSTEP) {
       try {
         restartedSuperstep = getLastCheckpointedSuperstep();
+
       } catch (IOException e) {
         throw new RuntimeException(e);
       }

@@ -18,7 +18,7 @@ import java.io.IOException;
 )
 
 public class MultipleSourcesShortestPaths
-        extends BasicComputation<LongWritable, ArrayWritable<DoubleWritable>, NullWritable, DoubleWritable>{
+        extends BasicComputation<LongWritable, MSSPVertexValue, NullWritable, DoubleWritable>{
 
     public static final String LANDMARK_VERTICES_AGG = "landmarks";
 
@@ -31,10 +31,10 @@ public class MultipleSourcesShortestPaths
             new IntConfOption("MultipleShortestPaths.numLandmarks", 30,
                     "number of landmarks");
 
-    /** ing on landmark id */
-    public static final IntConfOption INC_LANDMARKS =
-            new IntConfOption("MultipleShortestPaths.incLandmarks", 100,
-                    "inc for landmark id");
+    /** inc on landmark id */
+    public static final IntConfOption MAX_LANDMARK_ID =
+            new IntConfOption("MultipleShortestPaths.maxLandmarkId", 1,
+                    "max landmark id");
 
     /** Class logger */
     private static final Logger LOG =
@@ -44,7 +44,7 @@ public class MultipleSourcesShortestPaths
     public static final String AGGREGATOR_SEPARATOR = "#";
 
     @Override
-    public void compute(Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex, Iterable<DoubleWritable> messages)
+    public void compute(Vertex<LongWritable, MSSPVertexValue, NullWritable> vertex, Iterable<DoubleWritable> messages)
             throws IOException {
 
 
@@ -75,7 +75,7 @@ public class MultipleSourcesShortestPaths
         voteToHaltIfNecessary(vertex, workerContext);
     }
 
-    private void voteToHaltIfNecessary(Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex,
+    private void voteToHaltIfNecessary(Vertex<LongWritable, MSSPVertexValue, NullWritable> vertex,
                                        MSSPWorkerContext workerContext) {
 
         /*
@@ -87,18 +87,18 @@ public class MultipleSourcesShortestPaths
     }
 
     private void setValue(DoubleWritable newValue,
-                          Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex, MSSPWorkerContext workerContext) {
+                          Vertex<LongWritable, MSSPVertexValue, NullWritable> vertex, MSSPWorkerContext workerContext) {
 
         int currentEpoch = workerContext.getCurrentEpoch();
 
-        vertex.getValue().get()[currentEpoch] = newValue;
+        vertex.getValue().setValue(currentEpoch, newValue.get());
     }
 
-    private Double getCurrentEpochValue(Vertex<LongWritable, ArrayWritable<DoubleWritable>, NullWritable> vertex,
+    private double getCurrentEpochValue(Vertex<LongWritable, MSSPVertexValue, NullWritable> vertex,
                                        MSSPWorkerContext workerContext){
 
         int currentEpoch = workerContext.getCurrentEpoch();
 
-        return vertex.getValue().get()[currentEpoch].get();
+        return vertex.getValue().getValue(currentEpoch);
     }
 }

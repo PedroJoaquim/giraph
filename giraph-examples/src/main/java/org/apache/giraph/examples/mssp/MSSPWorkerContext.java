@@ -26,8 +26,6 @@ public class MSSPWorkerContext extends WorkerContext {
 
         Text aggregatedValue = this.<Text>getAggregatedValue(MultipleSourcesShortestPaths.LANDMARK_VERTICES_AGG);
 
-        LOG.info("debug-mssp: aggregatedValue = " + aggregatedValue);
-
         String[] splited = aggregatedValue.toString().split(MultipleSourcesShortestPaths.AGGREGATOR_SEPARATOR);
 
         this.currentEpoch = 0;

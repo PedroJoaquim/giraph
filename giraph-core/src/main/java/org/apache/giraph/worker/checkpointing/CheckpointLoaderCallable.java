@@ -6,6 +6,7 @@ import org.apache.giraph.graph.VertexEdgeCount;
 import org.apache.giraph.io.GiraphInputFormat;
 import org.apache.giraph.io.InputType;
 import org.apache.giraph.io.checkpoint.CheckpointInputFormat;
+import org.apache.giraph.partition.PartitionOwner;
 import org.apache.giraph.worker.BspServiceWorker;
 import org.apache.giraph.worker.InputSplitsCallable;
 import org.apache.giraph.worker.WorkerInputSplitsHandler;
@@ -16,8 +17,11 @@ import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.input.LineRecordReader;
+import org.apache.log4j.Logger;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Map;
 
 public class CheckpointLoaderCallable
         <I extends WritableComparable,
@@ -34,7 +38,13 @@ public class CheckpointLoaderCallable
 
     private final InputType inputType;
 
-    private long superstep;
+    public static long localVerticesLoaded = 0;
+    public static long remoteVerticesLoaded = 0;
+
+    /** Class logger */
+    private static final Logger LOG = Logger.getLogger(CheckpointLoaderCallable.class);
+
+    private long[] verticesLoadedPerWorker;
 
     /**
      * Constructor.
@@ -55,11 +65,24 @@ public class CheckpointLoaderCallable
 
         super(context, configuration, bspServiceWorker, splitsHandler);
 
+        this.verticesLoadedPerWorker = new long[getMaxWorkerTaskId(bspServiceWorker) + 1];
         this.inputType = inputType;
-        this.superstep = superstep;
         this.serviceWorker = bspServiceWorker;
         this.vertexCheckpointWriter = vertexCheckpointWriter;
         this.checkpointInputFormat = checkpointInputFormat;
+    }
+
+    private int getMaxWorkerTaskId(BspServiceWorker<I, V, E> worker) {
+
+        int max = Integer.MIN_VALUE;
+
+        for (PartitionOwner po : worker.getPartitionOwners()) {
+            if(po.getWorkerInfo().getTaskId() > max){
+                max = po.getWorkerInfo().getTaskId();
+            }
+        }
+
+        return max;
     }
 
 
@@ -105,14 +128,36 @@ public class CheckpointLoaderCallable
 
             Vertex<I, V, E> vertex = this.vertexCheckpointWriter.readVertex(line.toString());
 
+            PartitionOwner po = this.serviceWorker.getVertexPartitionOwner(vertex.getId());
+
             workerClientRequestProcessor.sendVertexRequest(
-                    this.serviceWorker.getVertexPartitionOwner(vertex.getId()),
+                    po,
                     vertex);
 
             vertexCount++;
+
+            verticesLoadedPerWorker[po.getWorkerInfo().getTaskId()]++;
         }
 
         recordReader.close();
+
+        int myId = serviceWorker.getWorkerInfo().getTaskId();
+
+        LOG.info("debug-load:" + myId + ":" + Arrays.toString(verticesLoadedPerWorker));
+
+        int totalRemoteVertices = 0;
+        int totalLocalVertices = 0;
+
+        for (int i = 0; i < verticesLoadedPerWorker.length; i++) {
+            if(i != myId){
+                totalRemoteVertices += verticesLoadedPerWorker[i];
+            }
+            else {
+                totalLocalVertices += verticesLoadedPerWorker[i];
+            }
+        }
+
+        addVerticesLoaded(totalRemoteVertices, totalLocalVertices);
 
         return new VertexEdgeCount(vertexCount, 0, 0);
 
@@ -141,5 +186,10 @@ public class CheckpointLoaderCallable
         recordReader.close();
 
         return new VertexEdgeCount(messageCount, 0, 0);
+    }
+
+    private synchronized void addVerticesLoaded(long remoteVerticesLoaded, long localVerticesLoaded){
+        CheckpointLoaderCallable.remoteVerticesLoaded += remoteVerticesLoaded;
+        CheckpointLoaderCallable.localVerticesLoaded += localVerticesLoaded;
     }
 }

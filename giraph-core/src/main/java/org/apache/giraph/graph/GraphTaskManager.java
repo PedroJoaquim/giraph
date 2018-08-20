@@ -65,6 +65,7 @@ import org.apache.giraph.worker.InputSplitsCallable;
 import org.apache.giraph.worker.WorkerContext;
 import org.apache.giraph.worker.WorkerObserver;
 import org.apache.giraph.worker.WorkerProgress;
+import org.apache.giraph.worker.checkpointing.CheckpointLoaderCallable;
 import org.apache.giraph.writable.kryo.KryoWritableWrapper;
 import org.apache.giraph.zk.ZooKeeperManager;
 import org.apache.hadoop.conf.Configuration;
@@ -320,8 +321,11 @@ end[PURE_YARN]*/
     List<PartitionStats> partitionStatsList = new ArrayList<PartitionStats>();
     int numComputeThreads = conf.getNumComputeThreads();
 
+    long start;
+
     // main superstep processing loop
     while (!finishedSuperstepStats.allVerticesHalted()) {
+      start = System.currentTimeMillis();
       final long superstep = serviceWorker.getSuperstep();
       superstepTimerContext = getTimerForThisSuperstep(superstep);
       GraphState graphState = new GraphState(superstep,
@@ -351,7 +355,12 @@ end[PURE_YARN]*/
 
       serviceWorker.getServerData().prepareResolveMutations();
       context.progress();
+
+      LOG.info("debug-timers: [initial] = " + (System.currentTimeMillis() - start)/1000.0d + " secs");
+      start = System.currentTimeMillis();
+
       prepareForSuperstep(graphState);
+
       context.progress();
       MessageStore<I, Writable> messageStore =
           serviceWorker.getServerData().getCurrentMessageStore();
@@ -365,14 +374,23 @@ end[PURE_YARN]*/
       }
       partitionStatsList.clear();
 
+      LOG.info("debug-timers: [preapre-superstep] = " + (System.currentTimeMillis() - start)/1000.0d + " secs");
+      start = System.currentTimeMillis();
+
       // execute the current superstep
       if (numPartitions > 0) {
         processGraphPartitions(context, partitionStatsList, graphState,
           messageStore, numThreads);
       }
 
+      LOG.info("debug-timers: [process-partitions] = " + (System.currentTimeMillis() - start)/1000.0d + " secs");
+      start = System.currentTimeMillis();
+
       finishedSuperstepStats = completeSuperstepAndCollectStats(
         partitionStatsList, superstepTimerContext);
+
+      LOG.info("debug-timers: [finish-superstep] = " + (System.currentTimeMillis() - start)/1000.0d + " secs");
+      start = System.currentTimeMillis();
       // END of superstep compute loop
     }
 
@@ -846,8 +864,15 @@ end[PURE_YARN]*/
         LOG.info("execute: Loading from checkpoint " + superstep);
       }
 
+      long start = System.currentTimeMillis();
       VertexEdgeCount vertexEdgeCount = serviceWorker.loadCheckpoint(
         serviceWorker.getRestartedSuperstep());
+      long end = System.currentTimeMillis();
+
+      LOG.info("debug-checkpoint: restart time = " + (end-start)/1000.0d + " secs");
+
+      LOG.info("debug-load: remote = " + CheckpointLoaderCallable.remoteVerticesLoaded + " | local = " + CheckpointLoaderCallable.localVerticesLoaded);
+      
       finishedSuperstepStats = new FinishedSuperstepStats(0, false,
           vertexEdgeCount.getVertexCount(), vertexEdgeCount.getEdgeCount(),
           false, CheckpointStatus.NONE);

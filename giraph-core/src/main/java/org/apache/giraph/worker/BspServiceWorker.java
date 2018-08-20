@@ -320,6 +320,7 @@ public class BspServiceWorker<I extends WritableComparable,
               " threads(s)");
     }
 
+      LOG.info("debug-loading: started loading input splits");
 
     List<VertexEdgeCount> results =
             ProgressableUtils.getResultsWithNCallables(inputSplitsCallableFactory,
@@ -329,6 +330,9 @@ public class BspServiceWorker<I extends WritableComparable,
     }
 
     workerClient.waitAllRequests();
+
+    LOG.info("debug-loading: finished loading input splits");
+
     return vertexEdgeCount;
   }
 
@@ -652,7 +656,9 @@ else[HADOOP_NON_SECURE]*/
     } else {
       vertexEdgeCount = new VertexEdgeCount();
     }
+    LOG.info("debug-loading: finishing loading vertices");
     WorkerProgress.get().finishLoadingVertices();
+      LOG.info("debug-loading: finishing loading vertices done");
 
     if (getConfiguration().hasEdgeInputFormat()) {
       getContext().progress();
@@ -1468,7 +1474,11 @@ else[HADOOP_NON_SECURE]*/
           public Void call() throws Exception {
             VertexWriter<I, V, E> vertexWriter =
                     vertexOutputFormat.createVertexWriter(getContext());
-            vertexWriter.setConf(getConfiguration());
+            vertexWriter.setConf(getConfiguration(
+
+
+
+            ));
             vertexWriter.initialize(getContext());
             long nextPrintVertices = 0;
             long nextUpdateProgressVertices = VERTICES_TO_UPDATE_PROGRESS;

@@ -128,7 +128,6 @@ else[HADOOP_NON_SECURE]*/
 
 
         getCentralizedServiceWorker().getWorkerClient().waitAllRequests();
-
     }
 
 

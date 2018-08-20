@@ -24,6 +24,7 @@ import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
@@ -201,6 +202,7 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
                       dataInputOutputWriter);
 
       map.put(partitionId, partitionMap);
+
     }
 
     return partitionMap;
@@ -264,7 +266,8 @@ public class IdByteArrayMessageStore<I extends WritableComparable,
 
   @Override
   public Iterable<I> getPartitionDestinationVertices(int partitionId) {
-    Basic2ObjectMap<I, DataInputOutput> partitionMap = map.get(partitionId);
+
+    Basic2ObjectMap<I, DataInputOutput> partitionMap = getOrCreatePartitionMap(partitionId);
     List<I> vertices = Lists.newArrayListWithCapacity(partitionMap.size());
     Iterator<I> iterator = partitionMap.fastKeyIterator();
     while (iterator.hasNext()) {

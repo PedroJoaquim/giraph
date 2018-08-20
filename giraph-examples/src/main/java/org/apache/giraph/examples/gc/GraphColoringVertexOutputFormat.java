@@ -1,9 +1,7 @@
-package org.apache.giraph.examples.mssp;
+package org.apache.giraph.examples.gc;
 
 import org.apache.giraph.graph.Vertex;
 import org.apache.giraph.io.formats.TextVertexOutputFormat;
-import org.apache.giraph.utils.ArrayWritable;
-import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
@@ -11,8 +9,8 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 import java.io.IOException;
 
-public class MSSPVertexOutputFormat
-        extends TextVertexOutputFormat<LongWritable, MSSPVertexValue, NullWritable> {
+public class GraphColoringVertexOutputFormat
+        extends TextVertexOutputFormat<LongWritable, GraphColoringVertexValue, NullWritable> {
 
     /** Specify the output delimiter */
     private static final String LINE_TOKENIZE_VALUE = "output.delimiter";
@@ -23,12 +21,13 @@ public class MSSPVertexOutputFormat
     /** Default is to not reverse id and value order. */
     private static final boolean REVERSE_ID_AND_VALUE_DEFAULT = false;
 
+
     @Override
     public TextVertexWriter createVertexWriter(TaskAttemptContext context) throws IOException, InterruptedException {
-        return new MSSPValueVertexWriter();
+        return new GraphColoringVertexWriter();
     }
 
-    protected class MSSPValueVertexWriter extends TextVertexWriterToEachLine {
+    private class GraphColoringVertexWriter extends TextVertexWriterToEachLine {
 
         /** Saved delimiter */
         private String delimiter;
@@ -46,34 +45,19 @@ public class MSSPVertexOutputFormat
         }
 
         @Override
-        protected Text convertVertexToLine(Vertex<LongWritable, MSSPVertexValue, NullWritable> vertex) throws IOException {
-
+        protected Text convertVertexToLine(Vertex<LongWritable, GraphColoringVertexValue, NullWritable> vertex) throws IOException {
             StringBuilder str = new StringBuilder();
             if (reverseOutput) {
-                str.append(convertVertexValueToString(vertex.getValue()));
+                str.append(vertex.getValue().getColor());
                 str.append(delimiter);
                 str.append(vertex.getId().toString());
             } else {
                 str.append(vertex.getId().toString());
                 str.append(delimiter);
-                str.append(convertVertexValueToString(vertex.getValue()));
+                str.append(vertex.getValue().getColor());
             }
 
             return new Text(str.toString());
-        }
-
-        private String convertVertexValueToString(MSSPVertexValue value){
-
-            double[] valuesArray = value.getValues();
-
-            StringBuilder str = new StringBuilder();
-            str.append(Double.toString(valuesArray[0]));
-
-            for (int i = 1; i < valuesArray.length; i++) {
-                str.append(",").append(Double.toString(valuesArray[i]));
-            }
-
-            return str.toString();
         }
     }
 }

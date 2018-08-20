@@ -2265,6 +2265,15 @@ public class BspServiceMaster<I extends WritableComparable,
             }
         }
 
+        if(getSuperstep() == getRestartedSuperstep()){
+            LOG.info("debug-locality: RESTART SUPERSTEP MATCH");
+
+            //todo remove this
+            if(getGraphPartitionerFactory() instanceof LocalityAwarePartitionerFactory){
+                LocalityAwarePartitionerFactory factory = (LocalityAwarePartitionerFactory) getGraphPartitionerFactory();
+                factory.assignPartitionsBasedOnLocality(getCheckpointPathManager(), getRestartedSuperstep(), chosenWorkerInfoList);
+            }
+        }
         // We need to finalize aggregators from previous superstep
         if (getSuperstep() >= 0) {
             aggregatorTranslation.postMasterCompute();

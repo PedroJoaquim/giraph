@@ -10,7 +10,7 @@ public class RestartMasterCompute extends MasterCompute{
 
     @Override
     public void compute() {
-        if(getSuperstep()==2){
+        if(getSuperstep()>=2){
             haltComputation();
         }
     }

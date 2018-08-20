@@ -146,7 +146,7 @@ public class DefaultMasterCheckpointHandler
         finalizedOutputStream.writeUTF("ignore"); //backwards compatibility
 
         for (WorkerInfo chosenWorkerInfo : chosenWorkerInfoList) {
-            finalizedOutputStream.writeInt(getBspService().getWorkerId(chosenWorkerInfo));
+            finalizedOutputStream.writeInt(chosenWorkerInfo.getWorkerIndex());
         }
 
         getCentralizedServiceMaster().getGlobalCommHandler().getAggregatorHandler().write(finalizedOutputStream);
@@ -157,6 +157,6 @@ public class DefaultMasterCheckpointHandler
         GiraphStats.getInstance().
                 getLastCheckpointedSuperstep().setValue(superstep);
 
-        S3Checkpointer.upload(superstep, getConfig());
+        //S3Checkpointer.upload(superstep, getConfig());
     }
 }
