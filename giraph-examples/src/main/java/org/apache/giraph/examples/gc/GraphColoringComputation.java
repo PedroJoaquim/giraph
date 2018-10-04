@@ -71,6 +71,11 @@ public class GraphColoringComputation
             vertex.getValue().setColor(UNDEFINED_COLOR);
         }
 
+        if(getSuperstep() == 1000){
+            vertex.voteToHalt();
+            return;
+        }
+
         int currentState = this.<GraphColoringWorkerContext>getWorkerContext().getCurrentState();
 
         if(vertex.getValue().getColor() != UNDEFINED_COLOR || currentState == FINISHED){
@@ -80,17 +85,23 @@ public class GraphColoringComputation
 
             vertex.getValue().setType(UNKNOWN_TYPE);
 
-            sendMessageToAllEdges(vertex, new GraphColoringMessage(vertex.getId().get()));
+            if(getSuperstep() > 0){
+                sendMessageToAllEdges(vertex, new GraphColoringMessage(vertex.getId().get()));
+            }
+
         }
         else if(currentState == MIS_DEGREE_INIT_2){
 
             int numMessages = 0;
 
-            for (GraphColoringMessage msg : messages){
-                numMessages++;
+            if(getSuperstep() == 1){
+                numMessages = vertex.getNumEdges();
             }
-
-            //LOG.info(getSuperstep() + "-debug-gc-mis-degree: vertex " + vertex.getId().get() + " degree = " + numMessages);
+            else {
+                for (GraphColoringMessage msg : messages){
+                    numMessages++;
+                }
+            }
 
             vertex.getValue().setDegree(numMessages);
         }
@@ -103,11 +114,14 @@ public class GraphColoringComputation
                 int unknownRemaining = this.<IntWritable>
                         getAggregatedValue(GraphColoringComputation.UNKNOWN_VERTICES_REMAINING).get();
 
-                if(vertex.getValue().getDegree() <= 0 || (unknownRemaining > 0 && unknownRemaining <= 10)){
+                if(vertex.getValue().getDegree() <= 0 || (unknownRemaining > 0 && unknownRemaining <= 10) ||
+                    getSuperstep() >= 10000){
                     prob = 1.0;
                 }
                 else {
                     prob = 1.0d / (2 * vertex.getValue().getDegree());
+
+                    prob = Math.max(prob, 0.001);
                 }
 
                 //LOG.info(getSuperstep() + "-debug-gc: vertex " + vertex.getId().get() + " prob = " + probInt);

@@ -734,6 +734,7 @@ else[HADOOP_NON_SECURE]*/
 
     long edgesCut = 0;
     long numVertices = 0;
+    long numEdges = 0;
 
     while (true){
 
@@ -753,6 +754,8 @@ else[HADOOP_NON_SECURE]*/
           if(!partitionStore2.hasPartition(targetPartition)){
             edgesCut++;
           }
+
+          numEdges++;
         }
       }
 
@@ -761,7 +764,9 @@ else[HADOOP_NON_SECURE]*/
 
     LOG.info("debug-metis: worker " + getWorkerInfo().getWorkerIndex() + " | partitions : " + Iterables.toString(partitionStore2.getPartitionIds()) +
             " | numVertices = " + numVertices + " | " +
+            " | numEdges = " + numEdges + " | " +
             " | edgesCut = " + edgesCut + " | time to calc edgeCut = " + ((System.currentTimeMillis() - start)/1000.0d) + " secs");
+
 
 
 

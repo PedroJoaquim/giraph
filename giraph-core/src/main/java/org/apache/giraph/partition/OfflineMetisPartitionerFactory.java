@@ -14,20 +14,19 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
-public class OfflineMetisPartitionerFactory <V extends Writable, E extends Writable>
+public class OfflineMetisPartitionerFactory<V extends Writable, E extends Writable>
         extends GraphPartitionerFactory<LongWritable, V, E> {
 
     /** Class logger */
     private static final Logger LOG = Logger.getLogger(OfflineMetisPartitionerFactory.class);
 
-    private int[] partitionToWorkerMapping;
+    private int[] finalPartitionToWorkerMapping;
 
     private int[] vertexToPartitionMapping;
-
-    private int numPartitionsPerWorker;
 
     private int vertexMappingBegin;
 
@@ -35,41 +34,110 @@ public class OfflineMetisPartitionerFactory <V extends Writable, E extends Writa
     public void setConf(ImmutableClassesGiraphConfiguration<LongWritable, V, E> conf) {
         super.setConf(conf);
 
-        this.numPartitionsPerWorker = conf.getNumComputeThreads();
-
         this.vertexMappingBegin = conf.getVertexMappingBegin();
-
-        int numUserPartitions = conf.getUserPartitionCount();
 
         int numWorkers = conf.getMaxWorkers();
 
-        if(numUserPartitions < numWorkers){
-            throw new RuntimeException("debug-metis: NUM PARTITIONS IS LESS THAN THE NUMBER OF WORKERS");
-        }
-        else if (numWorkers == numUserPartitions){
-            LOG.info("debug-metis: running base METIS partitioning");
+        String partitionMappingFileName = getConf().getMicroPartitionMappingPath();
 
-            this.partitionToWorkerMapping = new int[numWorkers];
-
-            for (int i = 0; i < numWorkers; i++) {
-                this.partitionToWorkerMapping[i] = i;
-            }
-        }
-        else {
-
-            if(getConf().isRandomMicroAssignment()){
-                LOG.info("debug-metis: running random micro METIS partitioning");
-            }
-            else {
-                LOG.info("debug-metis: running micro METIS partitioning");
-            }
-
-            this.partitionToWorkerMapping = readMappingToArray(numUserPartitions, getConf().getMicroPartitionMappingPath());
-        }
+        boolean baseMetis = partitionMappingFileName.isEmpty();
 
         int numGraphVertices = getConf().getNumGraphVertices();
 
         this.vertexToPartitionMapping = readMappingToArray(numGraphVertices, getConf().getVertexMappingPath());
+
+        int numPartitionsPerWorker = conf.getNumComputeThreads() * 2;
+
+        this.finalPartitionToWorkerMapping = new int[numWorkers * numPartitionsPerWorker];
+
+        for (int workerIdx = 0; workerIdx < numWorkers; workerIdx++) {
+            for (int partitionId = 0; partitionId < numPartitionsPerWorker; partitionId++) {
+
+                int finalPartitionId = (workerIdx * numPartitionsPerWorker) + partitionId;
+
+                this.finalPartitionToWorkerMapping[finalPartitionId] = workerIdx;
+            }
+        }
+
+        if (baseMetis){
+            LOG.info("debug-metis: running base METIS partitioning");
+
+            for (int i = 0; i < this.vertexToPartitionMapping.length; i++) {
+
+                int vertexId = i + this.vertexMappingBegin;
+
+                int metisPartitionID = this.vertexToPartitionMapping[i];
+
+                int newLocalPartitionId = (vertexId % numPartitionsPerWorker);
+
+                int basePartitionForWorker = metisPartitionID * numPartitionsPerWorker;
+
+                this.vertexToPartitionMapping[i] = basePartitionForWorker + newLocalPartitionId;
+            }
+
+        }
+        else {
+            LOG.info("debug-metis: running MICRO-METIS partitioning");
+
+            int[] microPartitionToWorkerMapping = readMappingToList(partitionMappingFileName);
+
+            for (int i = 0; i < this.vertexToPartitionMapping.length; i++) {
+
+                int vertexId = i + this.vertexMappingBegin;
+
+                int metisMicroPartitionID = this.vertexToPartitionMapping[i];
+
+                int workerId = microPartitionToWorkerMapping[metisMicroPartitionID];
+
+                int newLocalPartitionId = (vertexId % numPartitionsPerWorker);
+
+                int basePartitionForWorker = workerId * numPartitionsPerWorker;
+
+                this.vertexToPartitionMapping[i] = basePartitionForWorker + newLocalPartitionId;
+            }
+
+        }
+
+        LOG.info("debug-metis: FINISHED METIS PARTITIONING");
+
+    }
+
+    private int[] readMappingToList(String fileHDFSPath) {
+
+        List<Integer> mapping = new ArrayList<>();
+
+        try {
+
+            Path path = new Path(fileHDFSPath);
+
+            FileSystem fs = FileSystem.get(getConf());
+
+            BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(path)));
+
+            try {
+                String line;
+
+                while ((line = br.readLine()) != null){
+                    mapping.add(Integer.parseInt(line));
+                }
+
+            } finally {
+                br.close();
+            }
+        }
+        catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        int[] arrayMapping =  new int[mapping.size()];
+
+        for (int i = 0; i < mapping.size(); i++) {
+            arrayMapping[i] = mapping.get(i);
+        }
+
+        return arrayMapping;
     }
 
     private int[] readMappingToArray(int arraySize, String fileHDFSPath) {
@@ -108,60 +176,11 @@ public class OfflineMetisPartitionerFactory <V extends Writable, E extends Writa
 
     @Override
     public int getPartition(LongWritable id, int partitionCount, int workerCount) {
-
-        int initialPartitionId = this.vertexToPartitionMapping[(int) (id.get() - this.vertexMappingBegin)];
-
-        int assignedWorker = this.partitionToWorkerMapping[initialPartitionId];
-
-        int newLocalPartitionId = ((int) id.get() % this.numPartitionsPerWorker);
-
-        int basePartitionForWorker = assignedWorker * this.numPartitionsPerWorker;
-
-        return basePartitionForWorker + newLocalPartitionId;
+        return this.vertexToPartitionMapping[(int) (id.get() - this.vertexMappingBegin)];
     }
 
     @Override
     public int getWorker(int partition, int partitionCount, int workerCount) {
-        throw new NotImplementedException(); //should not be called in this class
-    }
-
-    @Override
-    public final MasterGraphPartitioner<LongWritable, V, E> createMasterGraphPartitioner() {
-        return new MasterGraphPartitionerImpl<LongWritable, V, E>(getConf()) {
-
-            @Override
-            protected int getWorkerIndex(int partition, int partitionCount,
-                                         int workerCount) {
-                return OfflineMetisPartitionerFactory.this.getWorker(
-                        partition, partitionCount, workerCount);
-            }
-
-            @Override
-            public Collection<PartitionOwner> createInitialPartitionOwners(
-                    Collection<WorkerInfo> availableWorkerInfos, int maxWorkers) {
-
-                int numPartitionsPerWorker = getConf().getNumComputeThreads();
-
-                int numWorkers = getConf().getMaxWorkers();
-
-                List<PartitionOwner> initialPartitionOwners = new ArrayList<>(numWorkers * numPartitionsPerWorker);
-
-                for (WorkerInfo workerInfo : availableWorkerInfos) {
-
-                    int workerTaskIdx = workerInfo.getWorkerIndex();
-
-                    for (int i = 0; i < numPartitionsPerWorker; i++) {
-
-                        int partitionId = (workerTaskIdx * numPartitionsPerWorker) + i;
-
-                        initialPartitionOwners.add(new BasicPartitionOwner(partitionId, workerInfo));
-                    }
-                }
-
-                this.setPartitionOwners(initialPartitionOwners);
-
-                return initialPartitionOwners;
-            }
-        };
+        return finalPartitionToWorkerMapping[partition];
     }
 }

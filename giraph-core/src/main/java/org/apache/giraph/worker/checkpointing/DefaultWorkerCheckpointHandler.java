@@ -61,7 +61,7 @@ public class DefaultWorkerCheckpointHandler
 
         for (PartitionOwner po: getCentralizedServiceWorker().getPartitionOwners()) {
             if(po.getWorkerInfo().getTaskId() == getCentralizedServiceWorker().getWorkerInfo().getTaskId()){
-                LOG.info("loadCheckpoint: loading partition " + po.getPartitionId() + " from checkpoint");
+                LOG.info("debug-checkpoint: loading partition " + po.getPartitionId() + " from checkpoint");
                 myPartitionIds.add(po.getPartitionId());
             }
             newNumberOfPartitions++;

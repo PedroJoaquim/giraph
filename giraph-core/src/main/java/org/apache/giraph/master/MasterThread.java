@@ -204,7 +204,7 @@ public class MasterThread<I extends WritableComparable, V extends Writable,
 
           double timeToRunMetisPartitioner = 0.0;
 
-          long edgeCut = this.bspServiceMaster.getEdgeCut();
+          long  edgeCut = this.bspServiceMaster.getEdgeCut();
 
           long numEdges = this.bspServiceMaster.getNumEdges();
 

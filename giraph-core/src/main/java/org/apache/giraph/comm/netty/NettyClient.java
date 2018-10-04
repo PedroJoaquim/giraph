@@ -251,6 +251,8 @@ public class NettyClient {
     maxPoolSize = GiraphConstants.NETTY_CLIENT_THREADS.get(conf);
     maxResolveAddressAttempts = MAX_RESOLVE_ADDRESS_ATTEMPTS.get(conf);
 
+    LOG.info("debug-error: creating map with maxPoolSize = " + maxPoolSize);
+
     clientRequestIdRequestInfoMap =
         new MapMaker().concurrencyLevel(maxPoolSize).makeMap();
 

@@ -13,7 +13,9 @@ public class GraphColoringMasterCompute extends MasterCompute {
 
     @Override
     public void compute() {
-
+        if(getSuperstep() == 1000){
+            haltComputation();
+        }
     }
 
     @Override

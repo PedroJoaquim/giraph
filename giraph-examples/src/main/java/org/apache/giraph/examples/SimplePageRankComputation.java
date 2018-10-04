@@ -52,7 +52,7 @@ import java.util.regex.Pattern;
 public class SimplePageRankComputation extends BasicComputation<LongWritable,
     DoubleWritable, FloatWritable, DoubleWritable> {
   /** Number of supersteps for this test */
-  public static final int MAX_SUPERSTEPS = 30;
+  public static final int MAX_SUPERSTEPS = 50;
   /** Logger */
   private static final Logger LOG =
       Logger.getLogger(SimplePageRankComputation.class);
